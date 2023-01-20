@@ -1,10 +1,9 @@
 #pragma once
 
-#include "../concurrency/OSThread.h"
+#include "concurrency/NotifiedWorkerThread.h"
 #include "RadioInterface.h"
 #include "MeshPacketQueue.h"
 
-#define RADIOLIB_EXCLUDE_HTTP
 #include <RadioLib.h>
 
 // ESP32 has special rules about ISR code
@@ -41,12 +40,8 @@ class LockingModule : public Module
     {
     }
     
-#ifdef ARCH_PORTDUINO
-    void SPItransfer(uint8_t cmd, uint8_t reg, uint8_t *dataOut, uint8_t *dataIn, uint8_t numBytes) override;
-#else
     void SPIbeginTransaction() override;
     void SPIendTransaction() override;
-#endif
 };
 
 class RadioLibInterface : public RadioInterface, protected concurrency::NotifiedWorkerThread

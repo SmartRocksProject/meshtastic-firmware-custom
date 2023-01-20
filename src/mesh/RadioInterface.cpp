@@ -89,7 +89,7 @@ const RegionInfo regions[] = {
          https://rrf.rsm.govt.nz/smart-web/smart/page/-smart/domain/licence/LicenceSummary.wdk?id=219752
          https://iotalliance.org.nz/wp-content/uploads/sites/4/2019/05/IoT-Spectrum-in-NZ-Briefing-Paper.pdf
       */
-    RDEF(NZ_865, 864.0f, 868.0f, 100, 0, 0, true, false, false),
+    RDEF(NZ_865, 864.0f, 868.0f, 100, 0, 36, true, false, false),
 
     /*
        https://lora-alliance.org/wp-content/uploads/2020/11/lorawan_regional_parameters_v1.0.3reva_0.pdf
@@ -175,9 +175,9 @@ uint32_t RadioInterface::getRetransmissionMsec(const MeshPacket *p)
 {
     assert(slotTimeMsec); // Better be non zero
     static uint8_t bytes[MAX_RHPACKETLEN];
-    size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), Data_fields, &p->decoded);
+    size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), &Data_msg, &p->decoded);
     uint32_t packetAirtime = getPacketTime(numbytes + sizeof(PacketHeader));
-    // Make sure enough time has elapsed for this packet to be sent and an ACK is received. 
+    // Make sure enough time has elapsed for this packet to be sent and an ACK is received.
     // DEBUG_MSG("Waiting for flooding message with airtime %d and slotTime is %d\n", packetAirtime, slotTimeMsec);
     float channelUtil = airTime->channelUtilizationPercent();
     uint8_t CWsize = map(channelUtil, 0, 100, CWmin, CWmax);
@@ -189,7 +189,7 @@ uint32_t RadioInterface::getRetransmissionMsec(const MeshPacket *p)
 uint32_t RadioInterface::getTxDelayMsec()
 {
     /** We wait a random multiple of 'slotTimes' (see definition in header file) in order to avoid collisions.
-    The pool to take a random multiple from is the contention window (CW), which size depends on the 
+    The pool to take a random multiple from is the contention window (CW), which size depends on the
     current channel utilization. */
     float channelUtil = airTime->channelUtilizationPercent();
     uint8_t CWsize = map(channelUtil, 0, 100, CWmin, CWmax);
@@ -225,7 +225,7 @@ uint32_t RadioInterface::getTxDelayMsecWeighted(float snr)
 
 void printPacket(const char *prefix, const MeshPacket *p)
 {
-    DEBUG_MSG("%s (id=0x%08x Fr0x%02x To0x%02x, WantAck%d, HopLim%d Ch0x%x", prefix, p->id, p->from & 0xff, p->to & 0xff,
+    DEBUG_MSG("%s (id=0x%08x fr=0x%02x to=0x%02x, WantAck=%d, HopLim=%d Ch=0x%x", prefix, p->id, p->from & 0xff, p->to & 0xff,
               p->want_ack, p->hop_limit, p->channel);
     if (p->which_payload_variant == MeshPacket_decoded_tag) {
         auto &s = p->decoded;
@@ -365,37 +365,37 @@ void RadioInterface::applyModemConfig()
 
         switch (loraConfig.modem_preset) {
         case Config_LoRaConfig_ModemPreset_SHORT_FAST:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 800 : 250;
+            bw = (myRegion->wideLora) ? 812.5 : 250;
             cr = 8;
             sf = 7;
             break;
         case Config_LoRaConfig_ModemPreset_SHORT_SLOW:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 800 : 250;
+            bw = (myRegion->wideLora) ? 812.5 : 250;
             cr = 8;
             sf = 8;
             break;
         case Config_LoRaConfig_ModemPreset_MEDIUM_FAST:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 800 : 250;
+            bw = (myRegion->wideLora) ? 812.5 : 250;
             cr = 8;
             sf = 9;
             break;
         case Config_LoRaConfig_ModemPreset_MEDIUM_SLOW:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 800 : 250;
+            bw = (myRegion->wideLora) ? 812.5 : 250;
             cr = 8;
             sf = 10;
             break;
         case Config_LoRaConfig_ModemPreset_LONG_FAST:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 800 : 250;
+            bw = (myRegion->wideLora) ? 812.5 : 250;
             cr = 8;
             sf = 11;
             break;
         case Config_LoRaConfig_ModemPreset_LONG_SLOW:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 400 : 125;
+            bw = (myRegion->wideLora) ? 406.25 : 125;
             cr = 8;
             sf = 12;
             break;
         case Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-            bw = (myRegion->wideLora && rIf_wide_lora) ? 200 : 31.25;
+            bw = (myRegion->wideLora) ? 203.125 : 31.25;
             cr = 8;
             sf = 12;
             break;
@@ -411,12 +411,20 @@ void RadioInterface::applyModemConfig()
             bw = 31.25;
         if (bw == 62) // Fix for 62.5Khz bandwidth
             bw = 62.5;
+        if (bw == 200)
+            bw = 203.125;
+        if (bw == 400)
+            bw = 406.25;
+        if (bw == 800)
+            bw = 812.5;
+        if (bw == 1600)
+            bw = 1625.0;
     }
 
     power = loraConfig.tx_power;
     assert(myRegion); // Should have been found in init
 
-    if ((power == 0) || (power > myRegion->powerLimit))
+    if ((power == 0) || ((power > myRegion->powerLimit) && !devicestate.owner.is_licensed))
         power = myRegion->powerLimit;
 
     if (power == 0)
@@ -424,7 +432,7 @@ void RadioInterface::applyModemConfig()
 
     // Set final tx_power back onto config
     loraConfig.tx_power = (int8_t)power; // cppcheck-suppress assignmentAddressToInteger
-    
+
     // Calculate the number of channels
     uint32_t numChannels = floor((myRegion->freqEnd - myRegion->freqStart) / (myRegion->spacing + (bw / 1000)));
 
@@ -441,9 +449,10 @@ void RadioInterface::applyModemConfig()
     saveChannelNum(channel_num);
     saveFreq(freq + config.lora.frequency_offset);
 
+    DEBUG_MSG("Radio freq=%.3f, config.lora.frequency_offset=%.3f\n", freq, config.lora.frequency_offset);
     DEBUG_MSG("Set radio: region=%s, name=%s, config=%u, ch=%d, power=%d\n", myRegion->name, channelName, loraConfig.modem_preset, channel_num, power);
-    DEBUG_MSG("Radio myRegion->freqStart / myRegion->freqEnd: %f -> %f (%f mhz)\n", myRegion->freqStart, myRegion->freqEnd, myRegion->freqEnd - myRegion->freqStart);
-    DEBUG_MSG("Radio myRegion->numChannels: %d\n", numChannels);
+    DEBUG_MSG("Radio myRegion->freqStart -> myRegion->freqEnd: %f -> %f (%f mhz)\n", myRegion->freqStart, myRegion->freqEnd, myRegion->freqEnd - myRegion->freqStart);
+    DEBUG_MSG("Radio myRegion->numChannels: %d x %.3fkHz\n", numChannels, bw);
     DEBUG_MSG("Radio channel_num: %d\n", channel_num);
     DEBUG_MSG("Radio frequency: %f\n", getFreq());
     DEBUG_MSG("Slot time: %u msec\n", slotTimeMsec);
@@ -460,7 +469,7 @@ void RadioInterface::limitPower()
     if (myRegion->powerLimit)
         maxPower = myRegion->powerLimit;
 
-    if (power > maxPower) {
+    if ((power > maxPower) && !devicestate.owner.is_licensed) {
         DEBUG_MSG("Lowering transmit power because of regulatory limits\n");
         power = maxPower;
     }

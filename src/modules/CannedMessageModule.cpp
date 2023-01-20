@@ -45,8 +45,7 @@ CannedMessageModule *cannedMessageModule;
 
 // TODO: move it into NodeDB.h!
 extern bool loadProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields, void *dest_struct);
-extern bool saveProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields,
-                      const void *dest_struct);
+extern bool saveProto(const char *filename, size_t protoSize, const pb_msgdesc_t *fields, const void *dest_struct);
 
 CannedMessageModule::CannedMessageModule()
     : SinglePortModule("canned", PortNum_TEXT_MESSAGE_APP), concurrency::OSThread("CannedMessageModule")
@@ -176,7 +175,7 @@ int CannedMessageModule::handleInputEvent(const InputEvent *event)
         DEBUG_MSG("Canned message event Matrix key pressed\n");
         // this will send the text immediately on matrix press
         this->runState = CANNED_MESSAGE_RUN_STATE_ACTION_SELECT;
-        this->payload = event->kbchar;
+        this->payload = MATRIXKEY;
         this->currentMessageIndex = event->kbchar -1;
         this->lastTouchMillis = millis();
         validEvent = true;
@@ -246,7 +245,12 @@ int32_t CannedMessageModule::runOnce()
             }
         } else {
             if ((this->messagesCount > this->currentMessageIndex) && (strlen(this->messages[this->currentMessageIndex]) > 0)) {
-                sendText(NODENUM_BROADCAST, this->messages[this->currentMessageIndex], true);
+                if(strcmp (this->messages[this->currentMessageIndex], "~") == 0) {
+                    powerFSM.trigger(EVENT_PRESS);
+                    return INT32_MAX;
+                } else {
+                    sendText(NODENUM_BROADCAST, this->messages[this->currentMessageIndex], true);
+                }
                 this->runState = CANNED_MESSAGE_RUN_STATE_SENDING_ACTIVE;
             } else {
                 DEBUG_MSG("Reset message is empty.\n");
@@ -446,11 +450,15 @@ void CannedMessageModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *st
         if (this->destSelect) {
             display->fillRect(0 + x, 0 + y, x + display->getWidth(), y + FONT_HEIGHT_SMALL);
             display->setColor(BLACK);
+            display->drawStringf(1 + x, 0 + y, buffer, "To: %s", cannedMessageModule->getNodeName(this->dest));
         }
         display->drawStringf(0 + x, 0 + y, buffer, "To: %s", cannedMessageModule->getNodeName(this->dest));
         // used chars right aligned
         sprintf(buffer, "%d left", Constants_DATA_PAYLOAD_LEN - this->freetext.length());
         display->drawString(x + display->getWidth() - display->getStringWidth(buffer), y + 0, buffer);
+        if (this->destSelect) {
+            display->drawString(x + display->getWidth() - display->getStringWidth(buffer) - 1, y + 0, buffer);
+        }
         display->setColor(WHITE);
         display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), cannedMessageModule->drawWithCursor(cannedMessageModule->freetext, cannedMessageModule->cursor));
     } else {
@@ -471,7 +479,7 @@ void CannedMessageModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *st
 void CannedMessageModule::loadProtoForModule()
 {
     if (!loadProto(cannedMessagesConfigFile, CannedMessageModuleConfig_size, sizeof(cannedMessagesConfigFile),
-                   CannedMessageModuleConfig_fields, &cannedMessageModuleConfig)) {
+                   &CannedMessageModuleConfig_msg, &cannedMessageModuleConfig)) {
         installDefaultCannedMessageModuleConfig();
     }
 }
@@ -490,8 +498,8 @@ bool CannedMessageModule::saveProtoForModule()
     FS.mkdir("/prefs");
 #endif
 
-    okay &= saveProto(cannedMessagesConfigFile, CannedMessageModuleConfig_size, sizeof(cannedMessageModuleConfig),
-                      CannedMessageModuleConfig_fields, &cannedMessageModuleConfig);
+    okay &= saveProto(cannedMessagesConfigFile, CannedMessageModuleConfig_size,
+        &CannedMessageModuleConfig_msg, &cannedMessageModuleConfig);
 
     return okay;
 }

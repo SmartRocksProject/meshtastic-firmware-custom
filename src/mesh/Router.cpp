@@ -2,6 +2,7 @@
 #include "Channels.h"
 #include "CryptoEngine.h"
 #include "NodeDB.h"
+#include "MeshRadio.h"
 #include "RTC.h"
 #include "configuration.h"
 #include "main.h"
@@ -11,7 +12,7 @@ extern "C" {
 #include "mesh/compression/unishox2.h"
 }
 
-#if HAS_WIFI
+#if HAS_WIFI || HAS_ETHERNET
 #include "mqtt/MQTT.h"
 #endif
 
@@ -21,7 +22,6 @@ extern "C" {
  * DONE: Implement basic interface and use it elsewhere in app
  * Add naive flooding mixin (& drop duplicate rx broadcasts), add tools for sending broadcasts with incrementing sequence #s
  * Add an optional adjacent node only 'send with ack' mixin.  If we timeout waiting for the ack, call handleAckTimeout(packet)
- * Add DSR mixin
  *
  **/
 
@@ -188,6 +188,18 @@ ErrorCode Router::send(MeshPacket *p)
 {
     assert(p->to != nodeDB.getNodeNum()); // should have already been handled by sendLocal
 
+    // Abort sending if we are violating the duty cycle
+    if (!config.lora.override_duty_cycle && myRegion->dutyCycle != 100) {
+      float hourlyTxPercent = airTime->utilizationTXPercent();
+      if (hourlyTxPercent > myRegion->dutyCycle) {
+          uint8_t silentMinutes = airTime->getSilentMinutes(hourlyTxPercent, myRegion->dutyCycle); 
+          DEBUG_MSG("WARNING: Duty cycle limit exceeded. Aborting send for now, you can send again in %d minutes.\n", silentMinutes);
+          Routing_Error err = Routing_Error_DUTY_CYCLE_LIMIT;
+          abortSendAndNak(err, p);
+          return err;
+      }
+    }
+
     // PacketId nakId = p->decoded.which_ackVariant == SubPacket_fail_id_tag ? p->decoded.ackVariant.fail_id : 0;
     // assert(!nakId); // I don't think we ever send 0hop naks over the wire (other than to the phone), test that assumption with
     // assert
@@ -209,7 +221,7 @@ ErrorCode Router::send(MeshPacket *p)
     if (p->which_payload_variant == MeshPacket_decoded_tag) {
         ChannelIndex chIndex = p->channel; // keep as a local because we are about to change it
 
-#if HAS_WIFI
+#if HAS_WIFI || HAS_ETHERNET
         // check if we should send decrypted packets to mqtt
 
         // truth table:
@@ -240,7 +252,7 @@ ErrorCode Router::send(MeshPacket *p)
             return encodeResult; // FIXME - this isn't a valid ErrorCode
         }
 
-#if HAS_WIFI
+#if HAS_WIFI || HAS_ETHERNET
         // the packet is now encrypted.
         // check if we should send encrypted packets to mqtt
         if (mqtt && shouldActuallyEncrypt)
@@ -294,7 +306,7 @@ bool perhapsDecode(MeshPacket *p)
 
             // Take those raw bytes and convert them back into a well structured protobuf we can understand
             memset(&p->decoded, 0, sizeof(p->decoded));
-            if (!pb_decode_from_bytes(bytes, rawSize, Data_fields, &p->decoded)) {
+            if (!pb_decode_from_bytes(bytes, rawSize, &Data_msg, &p->decoded)) {
                 DEBUG_MSG("Invalid protobufs in received mesh packet (bad psk?)!\n");
             } else if (p->decoded.portnum == PortNum_UNKNOWN_APP) {
                 DEBUG_MSG("Invalid portnum (bad psk?)!\n");
@@ -348,7 +360,7 @@ Routing_Error perhapsEncode(MeshPacket *p)
     if (p->which_payload_variant == MeshPacket_decoded_tag) {
         static uint8_t bytes[MAX_RHPACKETLEN]; // we have to use a scratch buffer because a union
 
-        size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), Data_fields, &p->decoded);
+        size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), &Data_msg, &p->decoded);
 
         // Only allow encryption on the text message app.
         //  TODO: Allow modules to opt into compression.

@@ -77,7 +77,7 @@ bool PhoneAPI::handleToRadio(const uint8_t *buf, size_t bufLength)
     // return (lastContactMsec != 0) &&
 
     memset(&toRadioScratch, 0, sizeof(toRadioScratch));
-    if (pb_decode_from_bytes(buf, bufLength, ToRadio_fields, &toRadioScratch)) {
+    if (pb_decode_from_bytes(buf, bufLength, &ToRadio_msg, &toRadioScratch)) {
         switch (toRadioScratch.which_payload_variant) {
         case ToRadio_packet_tag:
             return handleToRadioPacket(toRadioScratch.packet);
@@ -249,11 +249,15 @@ size_t PhoneAPI::getFromRadio(uint8_t *buf)
             fromRadioScratch.moduleConfig.which_payload_variant = ModuleConfig_canned_message_tag;
             fromRadioScratch.moduleConfig.payload_variant.canned_message = moduleConfig.canned_message;
             break;
+        case ModuleConfig_audio_tag:
+            fromRadioScratch.moduleConfig.which_payload_variant = ModuleConfig_audio_tag;
+            fromRadioScratch.moduleConfig.payload_variant.audio = moduleConfig.audio;
+            break;
         }
 
         config_state++;
         // Advance when we have sent all of our ModuleConfig objects
-        if (config_state > ModuleConfig_canned_message_tag) {
+        if (config_state > ModuleConfig_audio_tag) {
             state = STATE_SEND_COMPLETE_ID;
             config_state = 0;
         }
@@ -287,7 +291,7 @@ size_t PhoneAPI::getFromRadio(uint8_t *buf)
     // Do we have a message from the mesh?
     if (fromRadioScratch.which_payload_variant != 0) {
         // Encapsulate as a FromRadio packet
-        size_t numbytes = pb_encode_to_bytes(buf, FromRadio_size, FromRadio_fields, &fromRadioScratch);
+        size_t numbytes = pb_encode_to_bytes(buf, FromRadio_size, &FromRadio_msg, &fromRadioScratch);
 
         DEBUG_MSG("encoding toPhone packet to phone variant=%d, %d bytes\n", fromRadioScratch.which_payload_variant, numbytes);
         return numbytes;

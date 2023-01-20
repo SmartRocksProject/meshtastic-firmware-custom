@@ -7,7 +7,4 @@
 template class SX126xInterface<SX1262>;
 template class SX126xInterface<SX1268>;
 template class SX126xInterface<LLCC68>;
-
-#if !defined(ARCH_PORTDUINO)
-template class SX128xInterface<SX1281>;
-#endif
+template class SX128xInterface<SX1280>;

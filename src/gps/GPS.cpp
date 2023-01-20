@@ -150,9 +150,21 @@ bool GPS::setupGPS()
     _serial_gps->setRxBufferSize(2048); // the default is 256
 #endif
 
+// if the overrides are not dialled in, set them from the board definitions, if they exist
+
+#if defined(GPS_RX_PIN)
+if (!config.position.rx_gpio)
+    config.position.rx_gpio = GPS_RX_PIN;
+#endif
+#if defined(GPS_TX_PIN)
+if (!config.position.tx_gpio)
+    config.position.tx_gpio = GPS_TX_PIN;
+#endif
+
 // ESP32 has a special set of parameters vs other arduino ports
-#if defined(GPS_RX_PIN) && defined(ARCH_ESP32)
-        _serial_gps->begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+#if defined(ARCH_ESP32)
+        if(config.position.rx_gpio)
+            _serial_gps->begin(GPS_BAUDRATE, SERIAL_8N1, config.position.rx_gpio, config.position.tx_gpio);
 #else
         _serial_gps->begin(GPS_BAUDRATE);
 #endif
@@ -258,21 +270,30 @@ bool GPS::setup()
     pinMode(PIN_GPS_EN, OUTPUT);
 #endif
 
+#ifdef HAS_PMU
+if(config.position.gps_enabled){
+    setGPSPower(true);
+}
+#endif
+
 #ifdef PIN_GPS_RESET
     digitalWrite(PIN_GPS_RESET, 1); // assert for 10ms
     pinMode(PIN_GPS_RESET, OUTPUT);
     delay(10);
     digitalWrite(PIN_GPS_RESET, 0);
 #endif
-
     setAwake(true); // Wake GPS power before doing any init
     bool ok = setupGPS();
 
     if (ok) {
         notifySleepObserver.observe(&notifySleep);
         notifyDeepSleepObserver.observe(&notifyDeepSleep);
+        notifyGPSSleepObserver.observe(&notifyGPSSleep);
     }
-
+    if (config.position.gps_enabled==false) {
+        setAwake(false);
+        doGPSpowersave(false);
+    }
     return ok;
 }
 
@@ -281,6 +302,7 @@ GPS::~GPS()
     // we really should unregister our sleep observer
     notifySleepObserver.unobserve(&notifySleep);
     notifyDeepSleepObserver.unobserve(&notifyDeepSleep);
+    notifyGPSSleepObserver.observe(&notifyGPSSleep);
 }
 
 bool GPS::hasLock()
@@ -393,7 +415,7 @@ void GPS::publishUpdate()
         DEBUG_MSG("publishing pos@%x:2, hasVal=%d, GPSlock=%d\n", p.timestamp, hasValidLocation, hasLock());
 
         // Notify any status instances that are observing us
-        const meshtastic::GPSStatus status = meshtastic::GPSStatus(hasValidLocation, isConnected(), p);
+        const meshtastic::GPSStatus status = meshtastic::GPSStatus(hasValidLocation, isConnected(), isPowerSaving(), p);
         newStatus.notifyObservers(&status);
     }
 }
@@ -404,7 +426,7 @@ int32_t GPS::runOnce()
         // if we have received valid NMEA claim we are connected
         setConnected();
     } else {
-        if(gnssModel == GNSS_MODEL_UBLOX){
+        if((config.position.gps_enabled == 1) && (gnssModel == GNSS_MODEL_UBLOX)){
             // reset the GPS on next bootup
             if(devicestate.did_gps_reset && (millis() > 60000) && !hasFlow()) {
                 DEBUG_MSG("GPS is not communicating, trying factory reset on next bootup.\n");
@@ -506,6 +528,7 @@ int GPS::prepareDeepSleep(void *unused)
     DEBUG_MSG("GPS deep sleep!\n");
 
     // For deep sleep we also want abandon any lock attempts (because we want minimum power)
+    getSleepTime();
     setAwake(false);
 
     return 0;
@@ -640,6 +663,11 @@ GPS *createGps()
             new_gps->setup();
             return new_gps;
         }
+    }
+    else{
+        GPS *new_gps = new NMEAGPS();
+        new_gps->setup();
+        return new_gps;
     }
     return nullptr;
 #endif

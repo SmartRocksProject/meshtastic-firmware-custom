@@ -127,7 +127,7 @@ static const uint8_t SCK = PIN_SPI_SCK;
  * eink display pins
  */
 
-#define PIN_EINK_EN (0 + 2) // (0 + 2) Note: this is really just backlight power
+#define PIN_EINK_EN (32 + 2) // (0 + 2) Note: this is really just backlight power
 #define PIN_EINK_CS (0 + 26)
 #define PIN_EINK_BUSY (0 + 4)
 #define PIN_EINK_DC (0 + 17)
@@ -169,6 +169,7 @@ static const uint8_t SCK = PIN_SPI_SCK;
    IO4       <->  P0.04 (Arduino GPIO number 4)
    IO5       <->  P0.09 (Arduino GPIO number 9)
    IO6       <->  P0.10 (Arduino GPIO number 10)
+   IO7       <->  P0.28 (Arduino GPIO number 28)
    SW1       <->  P0.01 (Arduino GPIO number 1)
    A0        <->  P0.04/AIN2 (Arduino Analog A2
    A1        <->  P0.31/AIN7 (Arduino Analog A7
@@ -205,7 +206,8 @@ static const uint8_t SCK = PIN_SPI_SCK;
 #define RV3028_RTC (uint8_t) 0b1010010
 
 // RAK18001 Buzzer in Slot C
-#define PIN_BUZZER 21 // IO3 is PWM2
+// #define PIN_BUZZER 21 // IO3 is PWM2
+// NEW: set this via protobuf instead!
 
 // Battery
 // The battery sense is hooked to pin A0 (5)

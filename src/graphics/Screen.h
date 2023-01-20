@@ -10,7 +10,7 @@ namespace graphics
 class Screen 
 {
   public:
-    Screen(char){}
+    explicit Screen(char){}
     void onPress() {}
     void setup() {}
     void setOn(bool) {}
@@ -21,6 +21,7 @@ class Screen
     void startBluetoothPinScreen(uint32_t pin) {}
     void stopBluetoothPinScreen() {}
     void startRebootScreen() {}
+    void startFirmwareUpdateScreen() {}
 };
 }
 

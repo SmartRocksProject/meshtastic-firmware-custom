@@ -10,7 +10,7 @@
 
 This repository contains the device firmware for the Meshtastic project. This is a hard fork of the [meshtastic/firmware](https://github.com/meshtastic/firmware) repository for use for the UMass Lowell and University of Arizona Smart Rocks project.
 
-**[Building Instructions](https://meshtastic.org/docs/developers/Firmware/build)**
+**[Building Instructions](https://meshtastic.org/docs/development/firmware/build)**
 **[Flashing Instructions](https://meshtastic.org/docs/getting-started/flashing-firmware/)**
 
 ## Stats

@@ -17,7 +17,7 @@ ErrorCode FloodingRouter::send(MeshPacket *p)
     return Router::send(p);
 }
 
-bool FloodingRouter::shouldFilterReceived(MeshPacket *p)
+bool FloodingRouter::shouldFilterReceived(const MeshPacket *p)
 {
     if (wasSeenRecently(p)) { // Note: this will also add a recent packet record
         printPacket("Ignoring incoming msg, because we've already seen it", p);
@@ -29,17 +29,23 @@ bool FloodingRouter::shouldFilterReceived(MeshPacket *p)
 
 void FloodingRouter::sniffReceived(const MeshPacket *p, const Routing *c)
 {
-    PacketId ackId = ((c && c->error_reason == Routing_Error_NONE) || !c) ? p->decoded.request_id : 0;
-    if (ackId && p->to != getNodeNum()) {
+    bool isAck = ((c && c->error_reason == Routing_Error_NONE)); // consider only ROUTING_APP message without error as ACK
+    if (isAck && p->to != getNodeNum()) {
         // do not flood direct message that is ACKed 
         DEBUG_MSG("Receiving an ACK not for me, but don't need to rebroadcast this direct message anymore.\n");
         Router::cancelSending(p->to, p->decoded.request_id);   // cancel rebroadcast for this DM
-    } else if ((p->to != getNodeNum()) && (p->hop_limit > 0) && (getFrom(p) != getNodeNum())) {
+    } 
+    if ((p->to != getNodeNum()) && (p->hop_limit > 0) && (getFrom(p) != getNodeNum())) {
         if (p->id != 0) {
             if (config.device.role != Config_DeviceConfig_Role_CLIENT_MUTE) {
                 MeshPacket *tosend = packetPool.allocCopy(*p); // keep a copy because we will be sending it
 
                 tosend->hop_limit--; // bump down the hop count
+
+                // If it is a traceRoute request, update the route that it went via me
+                if (p->which_payload_variant == MeshPacket_decoded_tag && traceRouteModule->wantPacket(p)) {
+                    traceRouteModule->updateRoute(tosend);
+                }
 
                 printPacket("Rebroadcasting received floodmsg to neighbors", p);
                 // Note: we are careful to resend using the original senders node id

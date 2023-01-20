@@ -70,6 +70,8 @@
     #define HW_VENDOR HardwareModel_TLORA_V1_1P3
 #elif defined(TLORA_V2_1_16)
     #define HW_VENDOR HardwareModel_TLORA_V2_1_1P6
+#elif defined(TLORA_V2_1_18)
+    #define HW_VENDOR HardwareModel_TLORA_V2_1_1P8
 #elif defined(GENIEBLOCKS)
     #define HW_VENDOR HardwareModel_GENIEBLOCKS
 #elif defined(PRIVATE_HW)
@@ -82,6 +84,12 @@
     #define HW_VENDOR HardwareModel_STATION_G1
 #elif defined(DR_DEV)
     #define HW_VENDOR HardwareModel_DR_DEV
+#elif defined(HELTEC_V3)
+    #define HW_VENDOR HardwareModel_HELTEC_V3
+#elif defined(HELTEC_WSL_V3)
+    #define HW_VENDOR HardwareModel_HELTEC_WSL_V3
+#elif defined(TLORA_T3S3_V1)
+    #define HW_VENDOR HardwareModel_TLORA_T3_S3
 #endif
 
 //

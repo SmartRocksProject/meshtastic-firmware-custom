@@ -3,6 +3,7 @@
 #include "NodeDB.h"
 #include "SPILock.h"
 #include "configuration.h"
+#include "main.h"
 #include "error.h"
 #include "mesh-pb-constants.h"
 #include <pb_decode.h>
@@ -10,17 +11,6 @@
 
 // FIXME, we default to 4MHz SPI, SPI mode 0, check if the datasheet says it can really do that
 static SPISettings spiSettings(4000000, MSBFIRST, SPI_MODE0);
-
-#ifdef ARCH_PORTDUINO
-
-void LockingModule::SPItransfer(uint8_t cmd, uint8_t reg, uint8_t *dataOut, uint8_t *dataIn, uint8_t numBytes)
-{
-    concurrency::LockGuard g(spiLock);
-
-    Module::SPItransfer(cmd, reg, dataOut, dataIn, numBytes);
-}
-
-#else
 
 void LockingModule::SPIbeginTransaction()
 {
@@ -35,8 +25,6 @@ void LockingModule::SPIendTransaction()
 
     Module::SPIendTransaction();
 }
-
-#endif
 
 RadioLibInterface::RadioLibInterface(RADIOLIB_PIN_TYPE cs, RADIOLIB_PIN_TYPE irq, RADIOLIB_PIN_TYPE rst, RADIOLIB_PIN_TYPE busy,
                                      SPIClass &spi, PhysicalLayer *_iface)
@@ -100,10 +88,8 @@ bool RadioLibInterface::canSendImmediately()
         if (busyTx && (millis() - lastTxStart > 60000)) {
             DEBUG_MSG("Hardware Failure! busyTx for more than 60s\n");
             RECORD_CRITICALERROR(CriticalErrorCode_TRANSMIT_FAILED);
-#ifdef ARCH_ESP32
-            if (busyTx && (millis() - lastTxStart > 65000)) // After 5s more, reboot
-                ESP.restart();
-#endif
+            // reboot in 5 seconds when this condition occurs.
+            rebootAtMsec = lastTxStart + 65000;
         }
         if (busyRx)
             DEBUG_MSG("Can not send yet, busyRx\n");
@@ -317,7 +303,13 @@ ErrorCode RadioLibInterface::send(MeshPacket *p)
     void RadioLibInterface::handleReceiveInterrupt()
     {
         uint32_t xmitMsec;
-        assert(isReceiving);
+        
+        // when this is called, we should be in receive mode - if we are not, just jump out instead of bombing. Possible Race Condition?
+        if (!isReceiving) {
+            DEBUG_MSG("*** WAS_ASSERT *** handleReceiveInterrupt called when not in receive mode\n");
+            return;
+        }
+        
         isReceiving = false;
 
         // read the number of actually received bytes
@@ -393,6 +385,7 @@ ErrorCode RadioLibInterface::send(MeshPacket *p)
 
             int res = iface->startTransmit(radiobuf, numbytes);
             if (res != RADIOLIB_ERR_NONE) {
+                DEBUG_MSG("startTransmit failed, error=%d\n", res);
                 RECORD_CRITICALERROR(CriticalErrorCode_RADIO_SPI_BUG);
 
                 // This send failed, but make sure to 'complete' it properly

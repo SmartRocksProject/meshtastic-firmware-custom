@@ -13,7 +13,10 @@
 #include "unistd.h"
 #endif
 
+#define DEFAULT_REBOOT_SECONDS 5
+
 AdminModule *adminModule;
+bool hasOpenEditTransaction;
 
 /// A special reserved string to indicate strings we can not share with external nodes.  We will use this 'reserved' word instead.
 /// Also, to make setting work correctly, if someone tries to set a string to this reserved value we assume they don't really want
@@ -109,12 +112,15 @@ bool AdminModule::handleReceivedProtobuf(const MeshPacket &mp, AdminMessage *r)
 #ifdef ARCH_ESP32        
         if (BleOta::getOtaAppVersion().isEmpty()) {
             DEBUG_MSG("No OTA firmware available, scheduling regular reboot in %d seconds\n", s);
+            screen->startRebootScreen();
         }else{
+            screen->startFirmwareUpdateScreen();
             BleOta::switchToOtaApp();
             DEBUG_MSG("Rebooting to OTA in %d seconds\n", s);
         }
 #else
         DEBUG_MSG("Not on ESP32, scheduling regular reboot in %d seconds\n", s);
+        screen->startRebootScreen();
 #endif
         rebootAtMsec = (s < 0) ? 0 : (millis() + s * 1000);
         break;
@@ -133,13 +139,23 @@ bool AdminModule::handleReceivedProtobuf(const MeshPacket &mp, AdminMessage *r)
     case AdminMessage_factory_reset_tag: {
         DEBUG_MSG("Initiating factory reset\n");
         nodeDB.factoryReset();
-        reboot(5);
+        reboot(DEFAULT_REBOOT_SECONDS);
         break;
-    }
-    case AdminMessage_nodedb_reset_tag: {
+    } case AdminMessage_nodedb_reset_tag: {
         DEBUG_MSG("Initiating node-db reset\n");
         nodeDB.resetNodes();
-        reboot(5);
+        reboot(DEFAULT_REBOOT_SECONDS);
+        break;
+    }
+    case AdminMessage_begin_edit_settings_tag: {
+        DEBUG_MSG("Beginning transaction for editing settings\n");
+        hasOpenEditTransaction = true;
+        break;
+    }
+    case AdminMessage_commit_edit_settings_tag: {
+        DEBUG_MSG("Committing transaction for edited settings\n");
+        hasOpenEditTransaction = false;
+        saveChanges(SEGMENT_CONFIG | SEGMENT_MODULECONFIG | SEGMENT_DEVICESTATE | SEGMENT_CHANNELS);
         break;
     }
 #ifdef ARCH_PORTDUINO
@@ -163,6 +179,12 @@ bool AdminModule::handleReceivedProtobuf(const MeshPacket &mp, AdminMessage *r)
         }
         break;
     }
+    
+    // If asked for a response and it is not yet set, generate an 'ACK' response
+    if (mp.decoded.want_response && !myReply) {
+        myReply = allocErrorResponse(Routing_Error_NONE, &mp);
+    }
+
     return handled;
 }
 
@@ -173,6 +195,7 @@ bool AdminModule::handleReceivedProtobuf(const MeshPacket &mp, AdminMessage *r)
 void AdminModule::handleSetOwner(const User &o)
 {
     int changed = 0;
+    bool licensed_changed = false;
 
     if (*o.long_name) {
         changed |= strcmp(owner.long_name, o.long_name);
@@ -188,13 +211,14 @@ void AdminModule::handleSetOwner(const User &o)
     }
     if (owner.is_licensed != o.is_licensed) {
         changed = 1;
+        licensed_changed = true;
         owner.is_licensed = o.is_licensed;
+        config.lora.override_duty_cycle = owner.is_licensed; // override duty cycle for licensed operators 
     }
 
     if (changed) { // If nothing really changed, don't broadcast on the network or write to flash
-        service.reloadOwner();
-        DEBUG_MSG("Rebooting due to owner changes\n");
-        reboot(5);
+        service.reloadOwner(!hasOpenEditTransaction);
+        licensed_changed ? saveChanges(SEGMENT_CONFIG | SEGMENT_DEVICESTATE) : saveChanges(SEGMENT_DEVICESTATE);
     }
 }
 
@@ -220,7 +244,7 @@ void AdminModule::handleSetConfig(const Config &c)
             config.has_position = true;
             config.position = c.payload_variant.position;
             // Save nodedb as well in case we got a fixed position packet
-            nodeDB.saveToDisk(SEGMENT_DEVICESTATE);
+            saveChanges(SEGMENT_DEVICESTATE, false);
             break;
         case Config_power_tag:
             DEBUG_MSG("Setting config: Power\n");
@@ -252,9 +276,8 @@ void AdminModule::handleSetConfig(const Config &c)
             config.bluetooth = c.payload_variant.bluetooth;
             break;
     }
-
-    service.reloadConfig(SEGMENT_CONFIG);
-    reboot(5);
+    
+    saveChanges(SEGMENT_CONFIG);
 }
 
 void AdminModule::handleSetModuleConfig(const ModuleConfig &c)
@@ -295,17 +318,21 @@ void AdminModule::handleSetModuleConfig(const ModuleConfig &c)
             moduleConfig.has_canned_message = true;
             moduleConfig.canned_message = c.payload_variant.canned_message;
             break;
+        case ModuleConfig_audio_tag:
+            DEBUG_MSG("Setting module config: Audio\n");
+            moduleConfig.has_audio = true;
+            moduleConfig.audio = c.payload_variant.audio;
+            break;
     }
     
-    service.reloadConfig(SEGMENT_MODULECONFIG);
-    reboot(5);
+    saveChanges(SEGMENT_MODULECONFIG);
 }
 
 void AdminModule::handleSetChannel(const Channel &cc)
 {
     channels.setChannel(cc);
     channels.onConfigChanged(); // tell the radios about this change
-    nodeDB.saveChannelsToDisk();
+    saveChanges(SEGMENT_CHANNELS, false);
 }
 
 /**
@@ -421,6 +448,11 @@ void AdminModule::handleGetModuleConfig(const MeshPacket &req, const uint32_t co
             res.get_module_config_response.which_payload_variant = ModuleConfig_canned_message_tag;
             res.get_module_config_response.payload_variant.canned_message = moduleConfig.canned_message;
             break;
+        case AdminMessage_ModuleConfigType_AUDIO_CONFIG:
+            DEBUG_MSG("Getting module config: Audio\n");
+            res.get_module_config_response.which_payload_variant = ModuleConfig_audio_tag;
+            res.get_module_config_response.payload_variant.audio = moduleConfig.audio;
+            break;
         }
 
         // NOTE: The phone app needs to know the ls_secsvalue so it can properly expect sleep behavior.
@@ -469,7 +501,21 @@ void AdminModule::reboot(int32_t seconds)
     rebootAtMsec = (seconds < 0) ? 0 : (millis() + seconds * 1000);
 }
 
-AdminModule::AdminModule() : ProtobufModule("Admin", PortNum_ADMIN_APP, AdminMessage_fields)
+void AdminModule::saveChanges(int saveWhat, bool shouldReboot) 
+{
+    if (!hasOpenEditTransaction) {
+        DEBUG_MSG("Saving changes to disk\n");
+        service.reloadConfig(saveWhat); // Calls saveToDisk among other things
+    } else {
+        DEBUG_MSG("Delaying save of changes to disk until the open transaction is committed\n");
+    }
+    if (shouldReboot)
+    {
+        reboot(DEFAULT_REBOOT_SECONDS);
+    }
+}
+
+AdminModule::AdminModule() : ProtobufModule("Admin", PortNum_ADMIN_APP, &AdminMessage_msg)
 {
     // restrict to the admin channel for rx
     boundChannel = Channels::adminChannel;

@@ -44,11 +44,11 @@ MeshPacket *MeshModule::allocAckNak(Routing_Error err, NodeNum to, PacketId idFr
     // auto p = allocDataProtobuf(c);
     MeshPacket *p = router->allocForSending();
     p->decoded.portnum = PortNum_ROUTING_APP;
-    p->decoded.payload.size = pb_encode_to_bytes(p->decoded.payload.bytes, sizeof(p->decoded.payload.bytes), Routing_fields, &c);
+    p->decoded.payload.size = pb_encode_to_bytes(p->decoded.payload.bytes, sizeof(p->decoded.payload.bytes), &Routing_msg, &c);
 
     p->priority = MeshPacket_Priority_ACK;
 
-    p->hop_limit = 0; // Assume just immediate neighbors for now
+    p->hop_limit = config.lora.hop_limit; // Flood ACK back to original sender
     p->to = to;
     p->decoded.request_id = idFrom;
     p->channel = chIndex;
@@ -109,10 +109,7 @@ void MeshModule::callPlugins(const MeshPacket &mp, RxSource src)
             /// Also: if a packet comes in on the local PC interface, we don't check for bound channels, because it is TRUSTED and it needs to
             /// to be able to fetch the initial admin packets without yet knowing any channels.
 
-            bool rxChannelOk = !pi.boundChannel || (mp.from == 0) ||
-                !ch ||
-                strlen(ch->settings.name) > 0 ||
-                (strcasecmp(ch->settings.name, pi.boundChannel) == 0);
+            bool rxChannelOk = !pi.boundChannel || (mp.from == 0) || (strcasecmp(ch->settings.name, pi.boundChannel) == 0);
 
             if (!rxChannelOk) {
                 // no one should have already replied!

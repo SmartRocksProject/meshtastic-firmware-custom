@@ -11,6 +11,7 @@
 #include "modules/ReplyModule.h"
 #include "modules/RoutingModule.h"
 #include "modules/TextMessageModule.h"
+#include "modules/TraceRouteModule.h"
 #include "modules/WaypointModule.h"
 #if HAS_TELEMETRY
 #include "modules/Telemetry/DeviceTelemetry.h"
@@ -19,10 +20,11 @@
 #ifdef ARCH_ESP32
 #include "modules/esp32/RangeTestModule.h"
 #include "modules/esp32/StoreForwardModule.h"
+#include "modules/esp32/AudioModule.h"
 #endif
 #if defined(ARCH_ESP32) || defined(ARCH_NRF52)
 #include "modules/ExternalNotificationModule.h"
-#if !defined(TTGO_T_ECHO)
+#if (defined(ARCH_ESP32) || defined(ARCH_NRF52)) && !defined(TTGO_T_ECHO) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 #include "modules/SerialModule.h"
 #endif
 #endif
@@ -39,6 +41,7 @@ void setupModules()
     positionModule = new PositionModule();
     waypointModule = new WaypointModule();
     textMessageModule = new TextMessageModule();
+    traceRouteModule = new TraceRouteModule();
     
     // Note: if the rest of meshtastic doesn't need to explicitly use your module, you do not need to assign the instance
     // to a global variable.
@@ -60,22 +63,19 @@ void setupModules()
     new DeviceTelemetryModule();
     new EnvironmentTelemetryModule();
 #endif
-#if (defined(ARCH_ESP32) || defined(ARCH_NRF52)) && !defined(TTGO_T_ECHO)
+#if (defined(ARCH_ESP32) || defined(ARCH_NRF52)) && !defined(TTGO_T_ECHO) && !defined(CONFIG_IDF_TARGET_ESP32S2)
     new SerialModule();
 #endif
 #ifdef ARCH_ESP32
     // Only run on an esp32 based device.
-
-    /*
-        Maintained by MC Hamster (Jm Casler) jm@casler.org
-    */
-    new ExternalNotificationModule();
+    audioModule = new AudioModule();
+    externalNotificationModule = new ExternalNotificationModule();
 
     storeForwardModule = new StoreForwardModule();
 
     new RangeTestModule();
 #elif defined(ARCH_NRF52)
-new ExternalNotificationModule();
+    new ExternalNotificationModule();
 #endif
 
     // NOTE! This module must be added LAST because it likes to check for replies from other modules and avoid sending extra acks

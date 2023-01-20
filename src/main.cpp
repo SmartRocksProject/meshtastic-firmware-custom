@@ -8,8 +8,6 @@
 #include "configuration.h"
 #include "error.h"
 #include "power.h"
-// #include "rom/rtc.h"
-//#include "DSRRouter.h"
 #include "ReliableRouter.h"
 // #include "debug.h"
 #include "FSCommon.h"
@@ -37,7 +35,7 @@
 #include "nimble/NimbleBluetooth.h"
 #endif
 
-#if HAS_WIFI || defined(ARCH_PORTDUINO)
+#if HAS_WIFI
 #include "mesh/wifi/WiFiServerAPI.h"
 #include "mqtt/MQTT.h"
 #endif
@@ -51,7 +49,7 @@
 #include "RF95Interface.h"
 #include "SX1262Interface.h"
 #include "SX1268Interface.h"
-#include "SX1281Interface.h"
+#include "SX1280Interface.h"
 #if !HAS_RADIO && defined(ARCH_PORTDUINO)
 #include "platform/portduino/SimRadio.h"
 #endif
@@ -87,8 +85,6 @@ uint8_t kb_model;
 // The I2C address of the RTC Module (if found)
 uint8_t rtc_found;
 
-bool rIf_wide_lora = false;
-
 // Keystore Chips
 uint8_t keystore_found;
 #ifndef ARCH_PORTDUINO
@@ -102,7 +98,7 @@ uint32_t serialSinceMsec;
 bool pmu_found;
 
 // Array map of sensor types (as array index) and i2c address as value we'll find in the i2c scan
-uint8_t nodeTelemetrySensorsMap[TelemetrySensorType_QMI8658+1] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+uint8_t nodeTelemetrySensorsMap[_TelemetrySensorType_MAX + 1] = { 0 }; // one is enough, missing elements will be initialized to 0 anyway.
 
 Router *router = NULL; // Users of router don't care what sort of subclass implements that API
 
@@ -142,8 +138,9 @@ bool ButtonThread::shutdown_on_long_stop = false;
 #endif
 
 static Periodic *ledPeriodic;
-static OSThread *powerFSMthread, *buttonThread;
+static OSThread *powerFSMthread;
 #if HAS_BUTTON
+static OSThread *buttonThread;
 uint32_t ButtonThread::longPressTime = 0;
 #endif
 
@@ -218,7 +215,6 @@ void setup()
 
     fsInit();
 
-    // router = new DSRRouter();
     router = new ReliableRouter();
 
 #ifdef I2C_SDA1
@@ -246,8 +242,31 @@ void setup()
     digitalWrite(PIN_3V3_EN, 1);
 #endif
 
+    // Currently only the tbeam has a PMU
+    // PMU initialization needs to be placed before scanI2Cdevice
+    power = new Power();
+    power->setStatusHandler(powerStatus);
+    powerStatus->observe(&power->newStatus);
+    power->setup(); // Must be after status handler is installed, so that handler gets notified of the initial configuration
+
+
+#ifdef LILYGO_TBEAM_S3_CORE
+    // In T-Beam-S3-core, the I2C device cannot be scanned before power initialization, otherwise the device will be stuck
+    // PCF8563 RTC in tbeam-s3 uses Wire1 to share I2C bus
+    Wire1.beginTransmission(PCF8563_RTC);
+    if (Wire1.endTransmission() == 0){
+        rtc_found = PCF8563_RTC;
+        DEBUG_MSG("PCF8563 RTC found\n");
+    }
+#endif
+
     // We need to scan here to decide if we have a screen for nodeDB.init()
     scanI2Cdevice();
+
+#ifdef HAS_SDCARD
+    setupSDCard();
+#endif
+
 #ifdef RAK4630
     // scanEInkDevice();
 #endif
@@ -282,18 +301,10 @@ void setup()
 
     playStartMelody();
 
-    // Currently only the tbeam has a PMU
-    power = new Power();
-    power->setStatusHandler(powerStatus);
-    powerStatus->observe(&power->newStatus);
-    power->setup(); // Must be after status handler is installed, so that handler gets notified of the initial configuration
+    // fixed screen override?
+    if (config.display.oled != Config_DisplayConfig_OledType_OLED_AUTO)
+        screen_model = config.display.oled;
 
-    /*
-    * Repeat the scanning for I2C devices after power initialization or look for 'latecomers'. 
-    * Boards with an PMU need to be powered on to correctly scan to the device address, such as t-beam-s3-core
-    */
-    scanI2Cdevice();
-    
     // Init our SPI controller (must be before screen and lora)
     initSPI();
 #ifndef ARCH_ESP32
@@ -372,16 +383,15 @@ void setup()
     }
 #endif
 
-#if defined(USE_SX1281) && !defined(ARCH_PORTDUINO)
+#if defined(USE_SX1280)
     if (!rIf) {
-        rIf = new SX1281Interface(SX126X_CS, SX126X_DIO1, SX126X_RESET, SX126X_BUSY, SPI);
+        rIf = new SX1280Interface(SX128X_CS, SX128X_DIO1, SX128X_RESET, SX128X_BUSY, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find SX1281 radio\n");
+            DEBUG_MSG("Warning: Failed to find SX1280 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("SX1281 Radio init succeeded, using SX1281 radio\n");
-            rIf_wide_lora = true;
+            DEBUG_MSG("SX1280 Radio init succeeded, using SX1280 radio\n");
         }
     }
 #endif
@@ -437,6 +447,19 @@ void setup()
         }
     }
 #endif
+
+// check if the radio chip matches the selected region
+
+if((config.lora.region == Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLora())){
+    DEBUG_MSG("Warning: Radio chip does not support 2.4GHz LoRa. Reverting to unset.\n");
+    config.lora.region = Config_LoRaConfig_RegionCode_UNSET;
+    nodeDB.saveToDisk(SEGMENT_CONFIG);
+    if(!rIf->reconfigure()) {
+        DEBUG_MSG("Reconfigure failed, rebooting\n");
+        screen->startRebootScreen();
+        rebootAtMsec = millis() + 5000;
+    }
+}
 
 #if HAS_WIFI || HAS_ETHERNET
     mqttInit();

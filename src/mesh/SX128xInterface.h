@@ -1,12 +1,10 @@
 #pragma once
 
-#if !defined(ARCH_PORTDUINO)
-
 #include "RadioLibInterface.h"
 
 /**
  * \brief Adapter for SX128x radio family. Implements common logic for child classes.
- * \tparam T RadioLib module type for SX128x: SX1281.
+ * \tparam T RadioLib module type for SX128x: SX1280.
  */
 template<class T>
 class SX128xInterface : public RadioLibInterface
@@ -19,6 +17,8 @@ class SX128xInterface : public RadioLibInterface
     /// \return true if initialisation succeeded.
     virtual bool init() override;
 
+    virtual bool wideLora() override;
+
     /// Apply any radio provisioning changes
     /// Make sure the Driver is properly configured before calling init().
     /// \return true if initialisation succeeded.
@@ -27,9 +27,9 @@ class SX128xInterface : public RadioLibInterface
     /// Prepare hardware for sleep.  Call this _only_ for deep sleep, not needed for light sleep.
     virtual bool sleep() override;
 
-  protected:
+    bool isIRQPending() override { return lora.getIrqStatus() != 0; }
 
-    float currentLimit = 140; // Higher OCP limit for SX128x PA
+  protected:
 
     /**
      * Specific module instance 
@@ -71,5 +71,3 @@ class SX128xInterface : public RadioLibInterface
 
   private:
 };
-
-#endif

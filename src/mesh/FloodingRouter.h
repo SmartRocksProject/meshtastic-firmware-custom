@@ -2,6 +2,7 @@
 
 #include "PacketHistory.h"
 #include "Router.h"
+#include "modules/TraceRouteModule.h"
 
 /**
  * This is a mixin that extends Router with the ability to do Naive Flooding (in the standard mesh protocol sense)
@@ -50,7 +51,7 @@ class FloodingRouter : public Router, protected PacketHistory
      * Called immedately on receiption, before any further processing.
      * @return true to abandon the packet
      */
-    virtual bool shouldFilterReceived(MeshPacket *p) override;
+    virtual bool shouldFilterReceived(const MeshPacket *p) override;
 
     /**
      * Look for broadcasts we need to rebroadcast
