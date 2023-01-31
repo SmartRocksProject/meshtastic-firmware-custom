@@ -32,6 +32,9 @@
 // code)
 #endif
 
+#define HAS_SDCARD  //Have SPI interface SD card slot
+#define SDCARD_USE_SPI1
+
 // Leave undefined to disable our PMU IRQ handler.  DO NOT ENABLE THIS because the pmuirq can cause sperious interrupts
 // and waking from light sleep
 // #define PMU_IRQ 35
