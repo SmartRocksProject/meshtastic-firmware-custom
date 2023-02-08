@@ -25,7 +25,7 @@ void MasterLogger::writeString(const char* message, ...) {
     masterFile.close();
 }
 
-void MasterLogger::logData(LogData& data) {
+void MasterLogger::writeData(LogData& data) {
     // 4K should be enough space for a log entry...
     const int messageMaxLength = 4000;
     char fmtMessage[messageMaxLength];

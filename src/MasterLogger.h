@@ -35,7 +35,7 @@ public:
     /**
      * Write LogData to the Masterfile as a string.
      */
-    static void logData(LogData& data);
+    static void writeData(LogData& data);
 };
 
 #else
