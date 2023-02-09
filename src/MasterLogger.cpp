@@ -1,6 +1,7 @@
 #include "MasterLogger.h"
 
 #include "FSCommon.h"
+#include "SPILock.h"
 
 #include <cstdarg>
 #include <cstring>
@@ -20,9 +21,12 @@ void MasterLogger::writeString(const char* message, ...) {
     fmtMessage[length] = '\n';
 
     // Open master file as write (defaults to appending)
-    File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
-    masterFile.print(fmtMessage);
-    masterFile.close();
+    {
+        concurrency::LockGuard g(spiLock);
+        File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
+        masterFile.print(fmtMessage);
+        masterFile.close();
+    }
 }
 
 void MasterLogger::writeData(LogData& data) {
@@ -45,7 +49,10 @@ void MasterLogger::writeData(LogData& data) {
     );
 
     // Open master file as write (defaults to appending)
-    File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
-    masterFile.print(fmtMessage);
-    masterFile.close();
+    {
+        concurrency::LockGuard g(spiLock);
+        File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
+        masterFile.print(fmtMessage);
+        masterFile.close();
+    }
 }
