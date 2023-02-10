@@ -7,8 +7,8 @@
 
 
 #ifdef SDCARD_USE_SPI1  
-SPIClass SPI1(HSPI);
-#define SDHandler SPI1
+//SPIClass SPI1(HSPI);
+#define SDHandler SPI
 #endif
 
 
@@ -186,7 +186,7 @@ void fsInit()
 void setupSDCard()
 {
 #ifdef HAS_SDCARD
-    SDHandler.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
+    //SDHandler.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
 
     if (!SD.begin(SDCARD_CS, SDHandler)) {
         DEBUG_MSG("No SD_MMC card detected\n");

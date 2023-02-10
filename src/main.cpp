@@ -263,10 +263,6 @@ void setup()
     // We need to scan here to decide if we have a screen for nodeDB.init()
     scanI2Cdevice();
 
-#ifdef HAS_SDCARD
-    setupSDCard();
-#endif
-
 #ifdef RAK4630
     // scanEInkDevice();
 #endif
@@ -313,6 +309,10 @@ void setup()
     // ESP32
     SPI.begin(RF95_SCK, RF95_MISO, RF95_MOSI, RF95_NSS);
     SPI.setFrequency(4000000);
+#endif
+
+#ifdef HAS_SDCARD
+    setupSDCard();
 #endif
 
     // Initialize the screen first so we can show the logo while we start up everything else.
