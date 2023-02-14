@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <ctime>
 
+
 void MasterLogger::writeString(const char* message, ...) {
     // 4K should be enough space for a log entry...
     const int messageMaxLength = 4000;
@@ -55,4 +56,18 @@ void MasterLogger::writeData(LogData& data) {
         masterFile.print(fmtMessage);
         masterFile.close();
     }
+}
+
+bool MasterLogger::readLog(String& outLog) {
+    {
+        concurrency::LockGuard g(spiLock);
+        File masterFile = FSCom.open(MASTER_FILE_NAME, "rb");
+        if(!masterFile) {
+            return false;
+        }
+        outLog = masterFile.readString();
+
+        masterFile.close();
+    }
+    return true;
 }

@@ -3,6 +3,8 @@
 
 #include "GeoCoord.h"
 
+#include <WString.h>
+
 #include <cstdint>
 
 #define MASTER_FILE_NAME "Masterfile"
@@ -36,6 +38,8 @@ public:
      * Write LogData to the Masterfile as a string.
      */
     static void writeData(LogData& data);
+
+    static bool readLog(String& outLog);
 };
 
 #else
