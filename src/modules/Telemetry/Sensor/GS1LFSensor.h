@@ -7,7 +7,7 @@
 
 class GS1LFSensor : virtual public TelemetrySensor {
 private:
-    ADS1115 ADS{0x48, &Wire1};
+    ADS1115 ADS{GS1LF_ADDR, &Wire1};
 
 protected:
     virtual void setup() override;
