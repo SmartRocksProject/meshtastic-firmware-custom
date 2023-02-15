@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../mesh/generated/telemetry.pb.h"
-#include "TelemetrySensor.h"
+#include "../../Telemetry/Sensor/TelemetrySensor.h"
 
 #include "ADS1X15.h"
 

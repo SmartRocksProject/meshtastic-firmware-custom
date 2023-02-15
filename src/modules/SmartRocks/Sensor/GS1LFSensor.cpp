@@ -30,8 +30,8 @@ int32_t GS1LFSensor::runOnce() {
 
     // ALERT on/off thresholds
     float f = ADS.toVoltage(1);
-    ADS.setComparatorThresholdLow(1.234 / f);
-    ADS.setComparatorThresholdHigh(3.142 / f);
+    ADS.setComparatorThresholdLow(0.5 / f);
+    ADS.setComparatorThresholdHigh(1.0 / f);
     
     return initI2CSensor();
 }

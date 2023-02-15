@@ -21,7 +21,6 @@
 #include "Sensor/SHTC3Sensor.h"
 #include "Sensor/LPS22HBSensor.h"
 #include "Sensor/SHT31Sensor.h"
-#include "Sensor/GS1LFSensor.h"
 
 BMP280Sensor bmp280Sensor;
 BME280Sensor bme280Sensor;
@@ -32,7 +31,6 @@ INA219Sensor ina219Sensor;
 SHTC3Sensor shtc3Sensor;
 LPS22HBSensor lps22hbSensor;
 SHT31Sensor sht31Sensor;
-GS1LFSensor gs1lfSensor;
 
 #define FAILED_STATE_SENSOR_READ_MULTIPLIER 10
 #define DISPLAY_RECEIVEID_MEASUREMENTS_ON_SCREEN true
@@ -98,8 +96,6 @@ int32_t EnvironmentTelemetryModule::runOnce()
                 result = lps22hbSensor.runOnce();
             if (sht31Sensor.hasSensor())
                 result = sht31Sensor.runOnce();
-            if (gs1lfSensor.hasSensor())
-                result = gs1lfSensor.runOnce();
         }
         return result;
     } else {
@@ -236,8 +232,6 @@ bool EnvironmentTelemetryModule::sendTelemetry(NodeNum dest, bool phoneOnly)
         ina219Sensor.getMetrics(&m);
     if (ina260Sensor.hasSensor())
         ina260Sensor.getMetrics(&m);
-    if(gs1lfSensor.hasSensor())
-        gs1lfSensor.getMetrics(&m);
 
    DEBUG_MSG("(Sending): barometric_pressure=%f, current=%f, gas_resistance=%f, relative_humidity=%f, temperature=%f, voltage=%f\n",
         m.variant.environment_metrics.barometric_pressure,
