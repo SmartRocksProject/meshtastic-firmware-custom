@@ -38,6 +38,9 @@ int32_t GS1LFSensor::runOnce() {
 bool GS1LFSensor::getMetrics(Telemetry *measurement) {
     DEBUG_MSG("GS1LFSensor::getMetrics\n");
     measurement->variant.environment_metrics.voltage = ADS.toVoltage(ADS.getValue());
+    if(measurement->variant.environment_metrics.voltage == ADS1X15_INVALID_VOLTAGE) {
+        return false;
+    }
 
     return true;
 }
