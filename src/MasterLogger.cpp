@@ -43,7 +43,7 @@ void MasterLogger::writeData(LogData& data) {
     GeoCoord coord = data.gpsData;
     snprintf(
         fmtMessage, messageMaxLength,
-        "[%s] %s activity detected at (%d° %d' %d\" %c, %d° %d' %d\" %c)\n",
+        "[%s] %s activity detected at (%d°%d'%d\"%c, %d°%d'%d\"%c)\n",
         timeString, data.detectionType == LogData::DETECTION_TYPE_HUMAN ? "Human" : "Vehicular",
         coord.getDMSLatDeg(), coord.getDMSLatMin(), coord.getDMSLatSec(), coord.getDMSLatCP(),
         coord.getDMSLonDeg(), coord.getDMSLonMin(), coord.getDMSLonSec(), coord.getDMSLonCP()
