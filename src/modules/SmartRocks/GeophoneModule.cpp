@@ -33,11 +33,13 @@ void GeophoneModule::onNotify(uint32_t notification) {
 }
 
 void GeophoneModule::collectData() {
-    while(dataIndex < GEOPHONE_MODULE_SAMPLES || consecutiveBelowThreshold < maxConsecutiveBelowThreshold) {
+    while(dataIndex < GEOPHONE_MODULE_SAMPLES && consecutiveBelowThreshold < maxConsecutiveBelowThreshold) {
         float voltage = 0.0f;
         if(!gs1lfSensor.readVoltage(voltage)) {
             DEBUG_MSG("Error when reading GS1LFSensor voltage!\n");
             dataCollectionStarted = false;
+            consecutiveBelowThreshold = 0;
+            dataIndex = 0;
             return;
         }
 
