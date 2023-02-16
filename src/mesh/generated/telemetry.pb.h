@@ -95,8 +95,8 @@ extern "C" {
 
 /* Helper constants for enums */
 #define _TelemetrySensorType_MIN TelemetrySensorType_SENSOR_UNSET
-#define _TelemetrySensorType_MAX TelemetrySensorType_NUM_SENSORS
-#define _TelemetrySensorType_ARRAYSIZE ((TelemetrySensorType)(TelemetrySensorType_NUM_SENSORS+1))
+#define _TelemetrySensorType_MAX TelemetrySensorType_NUM_SENSORS - 1
+#define _TelemetrySensorType_ARRAYSIZE ((TelemetrySensorType)(TelemetrySensorType_NUM_SENSORS))
 
 
 

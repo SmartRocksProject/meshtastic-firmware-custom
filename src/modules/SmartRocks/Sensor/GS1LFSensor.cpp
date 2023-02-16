@@ -1,16 +1,19 @@
 #include "GS1LFSensor.h"
 
-GS1LFSensor::GS1LFSensor()
-    : TelemetrySensor(TelemetrySensorType_GS1LF, "Geophone") {}
+#include "mesh/generated/telemetry.pb.h"
+#include "main.h"
 
-void GS1LFSensor::setup() {}
-
-int32_t GS1LFSensor::runOnce() {
-    DEBUG_MSG("Init sensor: %s\n", sensorName);
-    if (!hasSensor()) {
-        return DEFAULT_SENSOR_MINIMUM_WAIT_TIME_BETWEEN_READS;
+bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
+    DEBUG_MSG("Init sensor: GS1LFSensor\n");
+    if(!hasSensor()) {
+        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
+        return false;
     }
-    status = ADS.begin(I2C_SDA, I2C_SCL);
+
+    if(!ADS.begin(I2C_SDA, I2C_SCL)) {
+        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
+        return false;
+    }
 
     ADS.setGain(1);
     ADS.setDataRate(7);
@@ -30,18 +33,22 @@ int32_t GS1LFSensor::runOnce() {
 
     // ALERT on/off thresholds
     float f = ADS.toVoltage(1);
-    ADS.setComparatorThresholdLow(0.5 / f);
-    ADS.setComparatorThresholdHigh(1.0 / f);
-    
-    return initI2CSensor();
+    ADS.setComparatorThresholdLow(lowThreshold / f);
+    ADS.setComparatorThresholdHigh(highThreshold / f);
+
+    return true;
 }
 
-bool GS1LFSensor::getMetrics(Telemetry *measurement) {
-    DEBUG_MSG("GS1LFSensor::getMetrics\n");
-    measurement->variant.environment_metrics.voltage = ADS.toVoltage(ADS.getValue());
-    if(measurement->variant.environment_metrics.voltage == ADS1X15_INVALID_VOLTAGE) {
+bool GS1LFSensor::hasSensor() {
+    return TelemetrySensorType_GS1LF < sizeof(nodeTelemetrySensorsMap) && nodeTelemetrySensorsMap[TelemetrySensorType_GS1LF] > 0;
+}
+
+bool GS1LFSensor::readVoltage(float& out_voltage) {
+    DEBUG_MSG("GS1LFSensor::readVoltage\n");
+    float voltage = ADS.toVoltage(ADS.getValue());
+    if(voltage == ADS1X15_INVALID_VOLTAGE) {
         return false;
     }
-
+    out_voltage = voltage;
     return true;
 }
