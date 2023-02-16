@@ -9,6 +9,7 @@
 class GeophoneModule : public concurrency::NotifiedWorkerThread {
 public:
     GeophoneModule();
+    ~GeophoneModule();
 
     virtual void onNotify(uint32_t notification) override;
 private:
@@ -19,8 +20,8 @@ private:
     GS1LFSensor gs1lfSensor;
     size_t consecutiveBelowThreshold{};
 
-    float rawData[GEOPHONE_MODULE_SAMPLES];
-    float fftData[GEOPHONE_MODULE_SAMPLES];
+    float* rawData;
+    float* fftData;
     size_t dataIndex{};
 
     const size_t samplingFrequency{860};

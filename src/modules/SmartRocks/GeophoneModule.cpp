@@ -13,8 +13,15 @@ GeophoneModule::GeophoneModule()
     : concurrency::NotifiedWorkerThread("GeophoneModule")
 {
     if(gs1lfSensor.setup(lowThreshold, highThreshold)) {
+        rawData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
+        fftData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
         attachInterrupt(0, sensorInterrupt, FALLING);
     }
+}
+
+GeophoneModule::~GeophoneModule() {
+    free(rawData);
+    free(fftData);
 }
 
 void GeophoneModule::onNotify(uint32_t notification) {
