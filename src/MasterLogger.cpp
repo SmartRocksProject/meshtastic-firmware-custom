@@ -24,6 +24,9 @@ void MasterLogger::writeString(const char* message, ...) {
     {
         concurrency::LockGuard g(spiLock);
         File masterFile = SD.open(MASTER_FILE_NAME, "w");
+        if(!masterFile) {
+            masterFile = SD.open(MASTER_FILE_NAME, "w", true);
+        }
         if(masterFile) {
             masterFile.println(fmtMessage);
             masterFile.close();
@@ -64,7 +67,7 @@ void MasterLogger::writeData(LogData& data) {
 bool MasterLogger::readLog(String& outLog) {
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "rb");
+        File masterFile = SD.open(MASTER_FILE_NAME, "r");
         if(!masterFile) {
             return false;
         }
