@@ -1,6 +1,5 @@
 #include "MasterLogger.h"
 
-#include "SPILock.h"
 #include <SD.h>
 
 #include <cstdarg>
@@ -8,6 +7,7 @@
 #include <cstdio>
 #include <ctime>
 
+#include "SPILock.h"
 
 void MasterLogger::writeString(const char* message, ...) {
     // 4K should be enough space for a log entry...
@@ -23,7 +23,7 @@ void MasterLogger::writeString(const char* message, ...) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "w");
+        File masterFile = SD.open(MASTER_FILE_NAME, "a");
         if(!masterFile) {
             masterFile = SD.open(MASTER_FILE_NAME, "w", true);
         }
