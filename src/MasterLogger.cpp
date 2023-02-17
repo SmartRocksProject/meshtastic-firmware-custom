@@ -1,7 +1,7 @@
 #include "MasterLogger.h"
 
-#include "FSCommon.h"
 #include "SPILock.h"
+#include <SD.h>
 
 #include <cstdarg>
 #include <cstring>
@@ -17,16 +17,17 @@ void MasterLogger::writeString(const char* message, ...) {
 
     va_list arg_ptr;
     va_start(arg_ptr, message);
-    int length = vsnprintf(fmtMessage, messageMaxLength - 1, message, arg_ptr);
+    vsnprintf(fmtMessage, messageMaxLength - 1, message, arg_ptr);
     va_end(arg_ptr);
-    fmtMessage[length] = '\n';
 
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
-        masterFile.print(fmtMessage);
-        masterFile.close();
+        File masterFile = SD.open(MASTER_FILE_NAME, "w");
+        if(masterFile) {
+            masterFile.println(fmtMessage);
+            masterFile.close();
+        }
     }
 }
 
@@ -43,7 +44,7 @@ void MasterLogger::writeData(LogData& data) {
     GeoCoord coord = data.gpsData;
     snprintf(
         fmtMessage, messageMaxLength,
-        "[%s] %s activity detected at (%d°%d'%d\"%c, %d°%d'%d\"%c)\n",
+        "[%s] %s activity detected at (%d°%d'%d\"%c, %d°%d'%d\"%c)",
         timeString, data.detectionType == LogData::DETECTION_TYPE_HUMAN ? "Human" : "Vehicular",
         coord.getDMSLatDeg(), coord.getDMSLatMin(), coord.getDMSLatSec(), coord.getDMSLatCP(),
         coord.getDMSLonDeg(), coord.getDMSLonMin(), coord.getDMSLonSec(), coord.getDMSLonCP()
@@ -52,16 +53,18 @@ void MasterLogger::writeData(LogData& data) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = FSCom.open(MASTER_FILE_NAME, FILE_O_WRITE);
-        masterFile.print(fmtMessage);
-        masterFile.close();
+        File masterFile = SD.open(MASTER_FILE_NAME, "w");
+        if(masterFile) {
+            masterFile.println(fmtMessage);
+            masterFile.close();
+        }
     }
 }
 
 bool MasterLogger::readLog(String& outLog) {
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = FSCom.open(MASTER_FILE_NAME, "rb");
+        File masterFile = SD.open(MASTER_FILE_NAME, "rb");
         if(!masterFile) {
             return false;
         }

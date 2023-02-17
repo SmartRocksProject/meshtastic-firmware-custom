@@ -32,8 +32,8 @@
 // code)
 #endif
 
-//#define HAS_SDCARD  //Have SPI interface SD card slot
-//#define SDCARD_USE_SPI1
+#define HAS_SDCARD  //Have SPI interface SD card slot
+#define SDCARD_USE_SPI1
 
 // SD Card SPI bus
 //#define SPI_MOSI                    (13)
