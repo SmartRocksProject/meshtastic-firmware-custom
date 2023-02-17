@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-#define MASTER_FILE_NAME "/Masterfile"
+#define MASTER_FILE_NAME "Masterfile.txt"
 
 #define STRING_LOGGING
 #ifdef STRING_LOGGING

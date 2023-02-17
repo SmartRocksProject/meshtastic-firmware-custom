@@ -186,7 +186,7 @@ void fsInit()
 void setupSDCard()
 {
 #ifdef HAS_SDCARD
-    if (!SD.begin(SDCARD_CS, SDHandler)) {
+    if (!SD.begin(SDCARD_CS, SDHandler, 4000000, "/sd", 5, true)) {
         DEBUG_MSG("No SD_MMC card detected\n");
         return ;
     }
