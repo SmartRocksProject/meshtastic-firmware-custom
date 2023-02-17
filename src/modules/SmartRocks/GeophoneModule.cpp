@@ -43,7 +43,7 @@ void GeophoneModule::collectData() {
             return;
         }
 
-        if(voltage > highThreshold) {
+        if(voltage > lowThreshold) {
             rawData[dataIndex++] = voltage;
             consecutiveBelowThreshold = 0;
         } else {
