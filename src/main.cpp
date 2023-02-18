@@ -146,8 +146,6 @@ uint32_t ButtonThread::longPressTime = 0;
 
 RadioInterface *rIf = NULL;
 
-#include "MasterLogger.h"
-
 /**
  * Some platforms (nrf52) might provide an alterate version that supresses calling delay from sleep.
  */
@@ -504,16 +502,6 @@ if((config.lora.region == Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLo
 
     // setBluetoothEnable(false); we now don't start bluetooth until we enter the proper state
     setCPUFast(false); // 80MHz is fine for our slow peripherals
-
-    MasterLogger::writeString("Hello SPI!");
-
-    String out;
-    if(MasterLogger::readLog(out)) {
-        DEBUG_MSG("\n\n%s\n\n", out);
-    } else {
-        DEBUG_MSG("\n\nFailed to read log\n\n");
-    }
-
 }
 
 uint32_t rebootAtMsec;   // If not zero we will reboot at this time (used to reboot shortly after the update completes)
