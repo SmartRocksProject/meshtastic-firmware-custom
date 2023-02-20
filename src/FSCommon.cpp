@@ -4,11 +4,12 @@
 #ifdef HAS_SDCARD
 #include <SPI.h>
 #include <SD.h>
+#include "SPILock.h"
 
 
 #ifdef SDCARD_USE_SPI1  
-SPIClass SPI1(HSPI);
-#define SDHandler SPI1
+//SPIClass SPI1(HSPI);
+#define SDHandler SPI
 #endif
 
 
@@ -186,9 +187,8 @@ void fsInit()
 void setupSDCard()
 {
 #ifdef HAS_SDCARD
-    SDHandler.begin(SPI_SCK, SPI_MISO, SPI_MOSI);
-
-    if (!SD.begin(SDCARD_CS, SDHandler)) {
+    concurrency::LockGuard g(spiLock);
+    if (!SD.begin(SDCARD_CS, SDHandler, 4000000, "/sd", 5, true)) {
         DEBUG_MSG("No SD_MMC card detected\n");
         return ;
     }
