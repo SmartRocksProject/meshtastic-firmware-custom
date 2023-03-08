@@ -78,7 +78,7 @@ void MasterLogger::writeData(LogData& data) {
 bool MasterLogger::readLog(String& outLog) {
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "r");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "r");
         if(!masterFile) {
             return false;
         }
