@@ -12,5 +12,4 @@ private:
     bool hasSensor();
 private:
     ADS1115 ADS{GS1LF_ADDR, &Wire1};
-    bool status{};
 };
