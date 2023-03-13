@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concurrency/NotifiedWorkerThread.h"
+#include "concurrency/Lock.h"
 
 #include "Sensor/GS1LFSensor.h"
 
@@ -16,6 +17,8 @@ private:
     void collectData();
     void analyzeData(size_t numSamples);
 private:
+    concurrency::Lock collectionFlagLock{};
+    
     bool dataCollectionStarted{};
     GS1LFSensor gs1lfSensor;
     size_t consecutiveBelowThreshold{};

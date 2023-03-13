@@ -25,9 +25,12 @@ GeophoneModule::~GeophoneModule() {
 }
 
 void GeophoneModule::onNotify(uint32_t notification) {
+    // Lock collection flag while checking and setting it.
+    collectionFlagLock.lock();
     // Ignore alert if data collection ongoing.
     if(!dataCollectionStarted) {
         dataCollectionStarted = true;
+        collectionFlagLock.unlock();
         collectData();
     }
 }
