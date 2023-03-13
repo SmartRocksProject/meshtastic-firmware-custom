@@ -1,6 +1,5 @@
 #include "INMP441Sensor.h"
 
-#include "configuration.h"
 #include <I2S.h>
 
 bool INMP441Sensor::setup() {

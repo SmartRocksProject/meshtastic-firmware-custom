@@ -1,5 +1,7 @@
 #pragma once
 
+#include "configuration.h"
+
 class INMP441Sensor {
 public:
     INMP441Sensor() = default;
