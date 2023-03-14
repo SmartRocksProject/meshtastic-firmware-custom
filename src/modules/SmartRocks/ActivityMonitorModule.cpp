@@ -3,6 +3,8 @@
 
 #include "ActivityMonitorModule.h"
 
+#include "esp_task_wdt.h"
+
 #include <freertos/task.h>
 
 //#include <arduinoFFT.h>
@@ -11,18 +13,18 @@ ActivityMonitorModule* activityMonitorModule;
 
 static void activateMonitor(void* p) {
     while(true) {
-        vTaskSuspend(NULL);
-        activityMonitorModule->notify(1, false);
+        uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        if(ulNotifiedValue > 0) {
+            activityMonitorModule->notify(1, false);
+        }
     }
 }
 
 static void sensorInterrupt() {
-    // Resume the suspended task.
-    BaseType_t taskYieldRequired = xTaskResumeFromISR(activityMonitorModule->runningTaskHandle);
+    BaseType_t taskYieldRequired = pdFALSE;
 
-    // We should switch context so the ISR returns to a different task.
-    // NOTE: How this is done depends on the port you are using. Check
-    // the documentation and examples for your port.
+    vTaskNotifyGiveFromISR(activityMonitorModule->runningTaskHandle, &taskYieldRequired);
+
     portYIELD_FROM_ISR(taskYieldRequired);
 }
 
@@ -59,11 +61,11 @@ void ActivityMonitorModule::onNotify(uint32_t notification) {
 void ActivityMonitorModule::collectData() {
     // Collect geophone data.
     geophoneCollecting.lock();
-    xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
 
     // Collect microphone data.
     microphoneCollecting.lock();
-    xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, tskIDLE_PRIORITY, NULL);
+    xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
 
     // Wait for data collection to finish by waiting for both locks to be unlocked.
     geophoneCollecting.lock();
@@ -92,6 +94,7 @@ void ActivityMonitorModule::collectGeophoneData() {
     DEBUG_MSG("Collecting geophone data...\n");
     geophoneSensorData.gs1lfSensor.setContinuousMode(true);
     delay(1); // Give sensor time to switch to continuous mode.
+    esp_task_wdt_reset();
     for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
@@ -111,6 +114,7 @@ void ActivityMonitorModule::collectGeophoneData() {
         } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
+        esp_task_wdt_reset();
     }
     geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
