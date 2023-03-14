@@ -43,6 +43,8 @@
 
 #define SDCARD_CS                   SPI_CS
 
+#define ADS1115_ALERT_PIN           (0)
+
 #define I2S_SCK                     (32)
 #define I2S_WS                      (15)
 #define I2S_SD                      (33)

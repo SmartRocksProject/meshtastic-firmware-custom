@@ -16,6 +16,8 @@ public:
     ~ActivityMonitorModule();
 
     virtual void onNotify(uint32_t notification) override;
+
+    TaskHandle_t runningTaskHandle{};
 private:
     void collectData();
     void analyzeData();
@@ -23,9 +25,11 @@ private:
     void collectGeophoneData();
     void collectMicrophoneData();
 
-    static void* geophoneCollectThread(void* p);
-    static void* microphoneCollectThread(void* p);
+    static void geophoneCollectThread(void* p);
+    static void microphoneCollectThread(void* p);
 private:
+    concurrency::Lock geophoneCollecting{};
+    concurrency::Lock microphoneCollecting{};
     concurrency::Lock collectionFlagLock{};
     bool dataCollectionStarted{};
 

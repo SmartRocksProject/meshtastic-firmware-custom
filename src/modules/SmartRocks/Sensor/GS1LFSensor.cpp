@@ -17,8 +17,7 @@ bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
 
     ADS.setGain(1);
     ADS.setDataRate(7);
-    ADS.setMode(0);
-    ADS.requestADC(0);
+    setContinuousMode(false);
 
     // Traditional mode (assert above high threshold, de-assert below low)
     ADS.setComparatorMode(0);
@@ -39,16 +38,23 @@ bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
     return true;
 }
 
+void GS1LFSensor::setContinuousMode(bool continuousMode) {
+    ADS.setMode(continuousMode ? 1 : 0);
+    if(continuousMode) {
+        ADS.requestADC(0);
+    }
+}
+
 bool GS1LFSensor::hasSensor() {
     return TelemetrySensorType_GS1LF < sizeof(nodeTelemetrySensorsMap) && nodeTelemetrySensorsMap[TelemetrySensorType_GS1LF] > 0;
 }
 
 bool GS1LFSensor::readVoltage(float& out_voltage) {
-    DEBUG_MSG("GS1LFSensor::readVoltage\n");
     float voltage = ADS.toVoltage(ADS.getValue());
     if(voltage == ADS1X15_INVALID_VOLTAGE) {
         return false;
     }
     out_voltage = voltage;
+    //DEBUG_MSG("GS1LFSensor::readVoltage: %f Volts\n", voltage);
     return true;
 }

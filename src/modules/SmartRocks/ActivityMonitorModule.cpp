@@ -3,12 +3,27 @@
 
 #include "ActivityMonitorModule.h"
 
+#include <freertos/task.h>
+
 //#include <arduinoFFT.h>
 
 ActivityMonitorModule* activityMonitorModule;
 
+static void activateMonitor(void* p) {
+    while(true) {
+        vTaskSuspend(NULL);
+        activityMonitorModule->notify(1, false);
+    }
+}
+
 static void sensorInterrupt() {
-    activityMonitorModule->notify(1, false);
+    // Resume the suspended task.
+    BaseType_t taskYieldRequired = xTaskResumeFromISR(activityMonitorModule->runningTaskHandle);
+
+    // We should switch context so the ISR returns to a different task.
+    // NOTE: How this is done depends on the port you are using. Check
+    // the documentation and examples for your port.
+    portYIELD_FROM_ISR(taskYieldRequired);
 }
 
 ActivityMonitorModule::ActivityMonitorModule()
@@ -17,8 +32,11 @@ ActivityMonitorModule::ActivityMonitorModule()
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
         geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
+
+        xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
         
-        attachInterrupt(0, sensorInterrupt, FALLING);
+        pinMode(ADS1115_ALERT_PIN, INPUT);
+        attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, FALLING);
     }
 }
 
@@ -40,21 +58,18 @@ void ActivityMonitorModule::onNotify(uint32_t notification) {
 
 void ActivityMonitorModule::collectData() {
     // Collect geophone data.
-    pthread_t geophoneThread;
-
-    esp_pthread_cfg_t cfg = esp_pthread_get_default_config();
-    cfg.stack_size = 4 * 1024;
-    esp_pthread_set_cfg(&cfg);
-
-    pthread_create(&geophoneThread, NULL, ActivityMonitorModule::geophoneCollectThread, NULL);
+    geophoneCollecting.lock();
+    xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, tskIDLE_PRIORITY, NULL);
 
     // Collect microphone data.
-    //pthread_t microphoneThread;
-    //pthread_create(&microphoneThread, NULL, ActivityMonitorModule::microphoneCollectThread, NULL);
+    microphoneCollecting.lock();
+    xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, tskIDLE_PRIORITY, NULL);
 
-    // Wait for data collection to finish.
-    pthread_join(geophoneThread, NULL);
-    //pthread_join(microphoneThread, NULL);
+    // Wait for data collection to finish by waiting for both locks to be unlocked.
+    geophoneCollecting.lock();
+    microphoneCollecting.lock();
+    geophoneCollecting.unlock();
+    microphoneCollecting.unlock();
 
     // Analyze and send data if event occured.
     analyzeData();
@@ -63,17 +78,20 @@ void ActivityMonitorModule::collectData() {
     dataCollectionStarted = false;
 }
 
-void* ActivityMonitorModule::geophoneCollectThread(void* p) {
+void ActivityMonitorModule::geophoneCollectThread(void* p) {
     activityMonitorModule->collectGeophoneData();
-    return NULL;
+    activityMonitorModule->geophoneCollecting.unlock();
 }
 
-void* ActivityMonitorModule::microphoneCollectThread(void* p) {
+void ActivityMonitorModule::microphoneCollectThread(void* p) {
     activityMonitorModule->collectMicrophoneData();
-    return NULL;
+    activityMonitorModule->microphoneCollecting.unlock();
 }
 
 void ActivityMonitorModule::collectGeophoneData() {
+    DEBUG_MSG("Collecting geophone data...\n");
+    geophoneSensorData.gs1lfSensor.setContinuousMode(true);
+    delay(1); // Give sensor time to switch to continuous mode.
     for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
@@ -86,15 +104,22 @@ void ActivityMonitorModule::collectGeophoneData() {
         geophoneSensorData.inputData[i] = voltage;
 
         // Sleep for any remaining time between samples.
-        unsigned long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (micros() - microseconds);
-        if(remainingTime > 0) {
+        long long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (long long) (micros() - microseconds);
+        if(remainingTime < 0) {
+            DEBUG_MSG("Sampling frequency too high!\n");
+            dataCollectionStarted = false;
+        } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
     }
+    geophoneSensorData.gs1lfSensor.setContinuousMode(false);
+    DEBUG_MSG("Finished collecting geophone data.\n");
+
+    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::collectMicrophoneData() {
-    
+    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::analyzeData() {
@@ -123,7 +148,7 @@ void ActivityMonitorModule::analyzeData() {
 
     //float dcComponent = real_fft_plan->output[0] / GEOPHONE_MODULE_SAMPLES;
 
-    // TODO: Analyze frequencies and send data
+    // Analyze frequencies and send data
     if(
         fundamentalFreq > geophoneSensorData.frequencyRangeThreshold.low &&
         fundamentalFreq < geophoneSensorData.frequencyRangeThreshold.high &&
@@ -132,5 +157,7 @@ void ActivityMonitorModule::analyzeData() {
         DEBUG_MSG("\n(Seismic) Event detected!\n");
         DEBUG_MSG("    Fundamental frequency: %f\n", fundamentalFreq);
         DEBUG_MSG("    Max amplitude: %f\n\n", maxAmplitude);
+    } else {
+        DEBUG_MSG("\nNo event detected.\n\n");
     }
 }

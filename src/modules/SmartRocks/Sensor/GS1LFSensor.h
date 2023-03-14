@@ -8,6 +8,8 @@ public:
     GS1LFSensor() = default;
     bool setup(double lowThreshold, double highThreshold);
     bool readVoltage(float& measurement);
+
+    void setContinuousMode(bool continuousMode);
 private:
     bool hasSensor();
 private:
