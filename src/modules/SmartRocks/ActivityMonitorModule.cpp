@@ -83,11 +83,13 @@ void ActivityMonitorModule::collectData() {
 void ActivityMonitorModule::geophoneCollectThread(void* p) {
     activityMonitorModule->collectGeophoneData();
     activityMonitorModule->geophoneCollecting.unlock();
+    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::microphoneCollectThread(void* p) {
     activityMonitorModule->collectMicrophoneData();
     activityMonitorModule->microphoneCollecting.unlock();
+    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::collectGeophoneData() {
@@ -118,12 +120,10 @@ void ActivityMonitorModule::collectGeophoneData() {
     }
     geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
-
-    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::collectMicrophoneData() {
-    vTaskDelete(NULL);
+    
 }
 
 void ActivityMonitorModule::analyzeData() {
