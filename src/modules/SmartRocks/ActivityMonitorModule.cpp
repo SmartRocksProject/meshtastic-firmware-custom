@@ -8,7 +8,13 @@
 #include <freertos/task.h>
 
 //#include <arduinoFFT.h>
+static void sensorInterrupt() {
+    BaseType_t taskYieldRequired = pdFALSE;
 
+    vTaskNotifyGiveFromISR(activityMonitorModule->runningTaskHandle, &taskYieldRequired);
+
+    portYIELD_FROM_ISR(taskYieldRequired);
+}
 ActivityMonitorModule* activityMonitorModule;
 
 static void activateMonitor(void* p) {
@@ -23,13 +29,7 @@ static void activateMonitor(void* p) {
     vTaskDelete(NULL);
 }
 
-static void sensorInterrupt() {
-    BaseType_t taskYieldRequired = pdFALSE;
 
-    vTaskNotifyGiveFromISR(activityMonitorModule->runningTaskHandle, &taskYieldRequired);
-
-    portYIELD_FROM_ISR(taskYieldRequired);
-}
 
 ActivityMonitorModule::ActivityMonitorModule()
     : concurrency::NotifiedWorkerThread("ActivityMonitorModule")
@@ -94,6 +94,8 @@ void ActivityMonitorModule::microphoneCollectThread(void* p) {
 
 void ActivityMonitorModule::collectGeophoneData() {
     DEBUG_MSG("Collecting geophone data...\n");
+    geophoneSensorData.gs1lfSensor.setContinuousMode(true);
+    delay(1);
     for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
@@ -115,6 +117,7 @@ void ActivityMonitorModule::collectGeophoneData() {
         }
         esp_task_wdt_reset();
     }
+    geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
 }
 

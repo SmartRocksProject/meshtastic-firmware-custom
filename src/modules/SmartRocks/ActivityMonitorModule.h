@@ -42,7 +42,7 @@ private:
         const double samplingFrequency{860.0};
         const double lowThreshold{0.3};
         const double highThreshold{1.0};
-        const double amplitudeThreshold{1.0};
+        const double amplitudeThreshold{0.25};
         const struct freqRange {
             double low;
             double high;
