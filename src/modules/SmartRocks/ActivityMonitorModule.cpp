@@ -12,12 +12,15 @@
 ActivityMonitorModule* activityMonitorModule;
 
 static void activateMonitor(void* p) {
+    pinMode(ADS1115_ALERT_PIN, INPUT);
+    attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, FALLING);
     while(true) {
         uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if(ulNotifiedValue > 0) {
             activityMonitorModule->notify(1, false);
         }
     }
+    vTaskDelete(NULL);
 }
 
 static void sensorInterrupt() {
@@ -36,9 +39,6 @@ ActivityMonitorModule::ActivityMonitorModule()
         geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
-        
-        pinMode(ADS1115_ALERT_PIN, INPUT);
-        attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, FALLING);
     }
 }
 
@@ -94,8 +94,6 @@ void ActivityMonitorModule::microphoneCollectThread(void* p) {
 
 void ActivityMonitorModule::collectGeophoneData() {
     DEBUG_MSG("Collecting geophone data...\n");
-    geophoneSensorData.gs1lfSensor.setContinuousMode(true);
-    delay(1); // Give sensor time to switch to continuous mode.
     esp_task_wdt_reset();
     for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
         unsigned long microseconds = micros();
@@ -118,7 +116,6 @@ void ActivityMonitorModule::collectGeophoneData() {
         }
         esp_task_wdt_reset();
     }
-    geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
 }
 
