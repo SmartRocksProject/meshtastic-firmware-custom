@@ -94,7 +94,6 @@ void ActivityMonitorModule::microphoneCollectThread(void* p) {
 
 void ActivityMonitorModule::collectGeophoneData() {
     DEBUG_MSG("Collecting geophone data...\n");
-    esp_task_wdt_reset();
     for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
