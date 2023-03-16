@@ -4,13 +4,10 @@
 #include "GeoCoord.h"
 
 #include <WString.h>
-
 #include <cstdint>
+#include <FS.h>
 
 #define MASTER_FILE_NAME "/Masterfile.txt"
-
-#define STRING_LOGGING
-#ifdef STRING_LOGGING
 
 class MasterLogger {
 public:
@@ -40,22 +37,9 @@ public:
     static void writeData(LogData& data);
 
     static bool readLog(String& outLog);
+
+    static void useFallbackFS();
+    static void useSDFS();
+private:
+    static FS* filesystem;
 };
-
-#else
-
-class MasterLogger {
-public:
-    struct LogData {
-        GeoCoord gpsData;
-        time_t unixTimeStamp;
-        enum DetectionType {
-            DETECTION_TYPE_HUMAN,
-            DETECTION_TYPE_VEHICLE
-        } detectionType;
-    };
-
-    static void writeByte(LogData data);
-};
-
-#endif

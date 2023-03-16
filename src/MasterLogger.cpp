@@ -1,6 +1,7 @@
 #include "MasterLogger.h"
 
 #include <SD.h>
+#include <FSCommon.h>
 
 #include <cstdarg>
 #include <cstring>
@@ -8,6 +9,16 @@
 #include <ctime>
 
 #include "SPILock.h"
+
+FS* MasterLogger::filesystem = &SD;
+
+void MasterLogger::useFallbackFS() {
+    filesystem = &FSCom;
+}
+
+void MasterLogger::useSDFS() {
+    filesystem = &SD;
+}
 
 void MasterLogger::writeString(const char* message, ...) {
     // 4K should be enough space for a log entry...
@@ -23,9 +34,9 @@ void MasterLogger::writeString(const char* message, ...) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "a");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "a");
         if(!masterFile) {
-            masterFile = SD.open(MASTER_FILE_NAME, "w", true);
+            masterFile = filesystem->open(MASTER_FILE_NAME, "w", true);
         }
         if(masterFile) {
             masterFile.println(fmtMessage);
@@ -56,7 +67,7 @@ void MasterLogger::writeData(LogData& data) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "w");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "w");
         if(masterFile) {
             masterFile.println(fmtMessage);
             masterFile.close();
@@ -67,7 +78,7 @@ void MasterLogger::writeData(LogData& data) {
 bool MasterLogger::readLog(String& outLog) {
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = SD.open(MASTER_FILE_NAME, "r");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "r");
         if(!masterFile) {
             return false;
         }
