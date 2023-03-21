@@ -7,7 +7,6 @@
 
 #include <freertos/task.h>
 
-//#include <arduinoFFT.h>
 static void sensorInterrupt() {
     BaseType_t taskYieldRequired = pdFALSE;
 
@@ -28,8 +27,6 @@ static void activateMonitor(void* p) {
     }
     vTaskDelete(NULL);
 }
-
-
 
 ActivityMonitorModule::ActivityMonitorModule()
     : concurrency::NotifiedWorkerThread("ActivityMonitorModule")
