@@ -3,8 +3,7 @@
 
 #include "ActivityMonitorModule.h"
 
-#include "esp_task_wdt.h"
-
+#include <esp_task_wdt.h>
 #include <freertos/task.h>
 
 static void sensorInterrupt() {
@@ -32,16 +31,24 @@ ActivityMonitorModule::ActivityMonitorModule()
     : concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
-        geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
-        geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * GEOPHONE_MODULE_SAMPLES);
+        geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
+        geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
+    }
+    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency)) {
+        //microphoneSensorData.outputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.numSamples);
+        //microphoneSensorData.inputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.VadBufferLength);
+        microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
+        microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
     }
 }
 
 ActivityMonitorModule::~ActivityMonitorModule() {
     free(geophoneSensorData.inputData);
     free(geophoneSensorData.outputData);
+    free(microphoneSensorData.vadBuffer);
+    free(microphoneSensorData.vad_inst);
 }
 
 void ActivityMonitorModule::onNotify(uint32_t notification) {
@@ -56,6 +63,8 @@ void ActivityMonitorModule::onNotify(uint32_t notification) {
 }
 
 void ActivityMonitorModule::collectData() {
+    geophoneSensorData.successfulRead = false;
+    microphoneSensorData.successfulRead = false;
     // Collect geophone data.
     geophoneCollecting.lock();
     xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
@@ -71,7 +80,9 @@ void ActivityMonitorModule::collectData() {
     microphoneCollecting.unlock();
 
     // Analyze and send data if event occured.
-    analyzeData();
+    if(geophoneSensorData.successfulRead && microphoneSensorData.successfulRead) {
+        analyzeData();
+    }
 
     // Reset collection flag.
     dataCollectionStarted = false;
@@ -93,12 +104,11 @@ void ActivityMonitorModule::collectGeophoneData() {
     DEBUG_MSG("Collecting geophone data...\n");
     geophoneSensorData.gs1lfSensor.setContinuousMode(true);
     delay(1);
-    for(int i = 0; i < GEOPHONE_MODULE_SAMPLES; i++) {
+    for(int i = 0; i < geophoneSensorData.numSamples; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
         if(!geophoneSensorData.gs1lfSensor.readVoltage(voltage)) {
             DEBUG_MSG("Error when reading GS1LFSensor voltage!\n");
-            dataCollectionStarted = false;
             return;
         }
 
@@ -108,7 +118,6 @@ void ActivityMonitorModule::collectGeophoneData() {
         long long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (long long) (micros() - microseconds);
         if(remainingTime < 0) {
             DEBUG_MSG("Sampling frequency too high!\n");
-            dataCollectionStarted = false;
         } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
@@ -116,19 +125,28 @@ void ActivityMonitorModule::collectGeophoneData() {
     }
     geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
+    geophoneSensorData.successfulRead = true;
 }
 
 void ActivityMonitorModule::collectMicrophoneData() {
-    
+    // Collect microphone data.
+    DEBUG_MSG("Collecting microphone data...\n");
+    if(microphoneSensorData.inmp441Sensor.readSamples((uint8_t*) microphoneSensorData.vadBuffer, microphoneSensorData.vadBufferLength * sizeof(int16_t) / sizeof(uint8_t)) != microphoneSensorData.vadBufferLength) {
+        DEBUG_MSG("Error when reading microphone data!\n");
+        return;
+    }
+
+    DEBUG_MSG("Finished collecting microphone data.\n");
+    microphoneSensorData.successfulRead = true;
 }
 
 void ActivityMonitorModule::analyzeData() {
-    double totalTime = GEOPHONE_MODULE_SAMPLES / geophoneSensorData.samplingFrequency;
+    double totalTime = geophoneSensorData.numSamples / geophoneSensorData.samplingFrequency;
 
     float maxMagnitude{};
     float fundamentalFreq{};
 
-    fft_config_t *real_fft_plan = fft_init(GEOPHONE_MODULE_SAMPLES, FFT_REAL, FFT_FORWARD, geophoneSensorData.inputData, geophoneSensorData.outputData);
+    fft_config_t *real_fft_plan = fft_init(geophoneSensorData.numSamples, FFT_REAL, FFT_FORWARD, geophoneSensorData.inputData, geophoneSensorData.outputData);
     fft_execute(real_fft_plan);
 
     for(int i = 1; i < real_fft_plan->size / 2; i++) {
@@ -143,10 +161,10 @@ void ActivityMonitorModule::analyzeData() {
         }
     }
 
-    /*Multiply the magnitude at all other frequencies with (2 / GEOPHONE_MODULE_SAMPLES) to obtain the amplitude at that frequency*/
-    float maxAmplitude = maxMagnitude * (2.0 / GEOPHONE_MODULE_SAMPLES);
+    /*Multiply the magnitude at all other frequencies with (2 / geophoneSensorData.numSamples) to obtain the amplitude at that frequency*/
+    float maxAmplitude = maxMagnitude * (2.0 / geophoneSensorData.numSamples);
 
-    //float dcComponent = real_fft_plan->output[0] / GEOPHONE_MODULE_SAMPLES;
+    //float dcComponent = real_fft_plan->output[0] / geophoneSensorData.numSamples;
 
     // Analyze frequencies and send data
     if(
@@ -158,6 +176,13 @@ void ActivityMonitorModule::analyzeData() {
         DEBUG_MSG("    Fundamental frequency: %f\n", fundamentalFreq);
         DEBUG_MSG("    Max amplitude: %f\n\n", maxAmplitude);
     } else {
-        DEBUG_MSG("\nNo event detected.\n\n");
+        DEBUG_MSG("\n(Seismic) No event detected.\n\n");
+    }
+
+    vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
+    if(vadState == VAD_SPEECH) {
+        DEBUG_MSG("\n(Vocal) Event detected!\n\n");
+    } else {
+        DEBUG_MSG("\n(Vocal) No event detected.\n\n");
     }
 }
