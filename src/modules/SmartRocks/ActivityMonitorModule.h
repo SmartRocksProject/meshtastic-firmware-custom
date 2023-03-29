@@ -24,6 +24,9 @@ private:
     void collectGeophoneData();
     void collectMicrophoneData();
 
+    void analyzeGeophoneData();
+    void analyzeMicrophoneData();
+
     static void geophoneCollectThread(void* p);
     static void microphoneCollectThread(void* p);
 private:
@@ -49,6 +52,7 @@ private:
             double high;
         } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
     } geophoneSensorData;
+    bool geophoneInitialized{};
 
     struct MicrophoneSensorData {
         INMP441Sensor inmp441Sensor;
@@ -63,13 +67,14 @@ private:
         //uint8_t* inputData;
 
         bool successfulRead{false};
-        const int samplingFrequency{vadSampleRate};
+        const uint32_t samplingFrequency{vadSampleRate};
         const double amplitudeThreshold{1.0};
         const struct freqRange {
             double low;
             double high;
         } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
     } microphoneSensorData;
+    bool microphoneInitialized{};
 };
 
 extern ActivityMonitorModule* activityMonitorModule;

@@ -33,14 +33,17 @@ ActivityMonitorModule::ActivityMonitorModule()
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
         geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
+        geophoneInitialized = true;
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
     }
-    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency)) {
+    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, microphoneSensorData.vadBufferLength)) {
         //microphoneSensorData.outputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.numSamples);
         //microphoneSensorData.inputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.VadBufferLength);
         microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
         microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
+
+        microphoneInitialized = true;
     }
 }
 
@@ -66,22 +69,32 @@ void ActivityMonitorModule::collectData() {
     geophoneSensorData.successfulRead = false;
     microphoneSensorData.successfulRead = false;
     // Collect geophone data.
-    geophoneCollecting.lock();
-    xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
+    if(geophoneInitialized) {
+        geophoneCollecting.lock();
+        xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
+    }
 
     // Collect microphone data.
-    microphoneCollecting.lock();
-    xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
-
+    if(microphoneInitialized) {
+        microphoneCollecting.lock();
+        xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
+    }
+    
     // Wait for data collection to finish by waiting for both locks to be unlocked.
-    geophoneCollecting.lock();
-    microphoneCollecting.lock();
-    geophoneCollecting.unlock();
-    microphoneCollecting.unlock();
+    if(geophoneInitialized) {
+        geophoneCollecting.lock();
+        geophoneCollecting.unlock();
+    }
+    if(microphoneInitialized) {
+        microphoneCollecting.lock();
+        microphoneCollecting.unlock();
+    }
 
     // Analyze and send data if event occured.
-    if(geophoneSensorData.successfulRead && microphoneSensorData.successfulRead) {
+    if(geophoneSensorData.successfulRead || microphoneSensorData.successfulRead) {
         analyzeData();
+        geophoneSensorData.successfulRead = false;
+        microphoneSensorData.successfulRead = false;
     }
 
     // Reset collection flag.
@@ -117,11 +130,10 @@ void ActivityMonitorModule::collectGeophoneData() {
         // Sleep for any remaining time between samples.
         long long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (long long) (micros() - microseconds);
         if(remainingTime < 0) {
-            DEBUG_MSG("Sampling frequency too high!\n");
+            DEBUG_MSG("(GS1LF) Sampling frequency too high!\n");
         } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
-        esp_task_wdt_reset();
     }
     geophoneSensorData.gs1lfSensor.setContinuousMode(false);
     DEBUG_MSG("Finished collecting geophone data.\n");
@@ -131,7 +143,8 @@ void ActivityMonitorModule::collectGeophoneData() {
 void ActivityMonitorModule::collectMicrophoneData() {
     // Collect microphone data.
     DEBUG_MSG("Collecting microphone data...\n");
-    if(microphoneSensorData.inmp441Sensor.readSamples((uint8_t*) microphoneSensorData.vadBuffer, microphoneSensorData.vadBufferLength * sizeof(int16_t) / sizeof(uint8_t)) != microphoneSensorData.vadBufferLength) {
+
+    if(microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer) != microphoneSensorData.vadBufferLength) {
         DEBUG_MSG("Error when reading microphone data!\n");
         return;
     }
@@ -141,6 +154,16 @@ void ActivityMonitorModule::collectMicrophoneData() {
 }
 
 void ActivityMonitorModule::analyzeData() {
+    if(geophoneSensorData.successfulRead) {
+        analyzeGeophoneData();
+    }
+
+    if(microphoneSensorData.successfulRead) {
+        analyzeMicrophoneData();
+    }
+}
+
+void ActivityMonitorModule::analyzeGeophoneData() {
     double totalTime = geophoneSensorData.numSamples / geophoneSensorData.samplingFrequency;
 
     float maxMagnitude{};
@@ -178,7 +201,9 @@ void ActivityMonitorModule::analyzeData() {
     } else {
         DEBUG_MSG("\n(Seismic) No event detected.\n\n");
     }
+}
 
+void ActivityMonitorModule::analyzeMicrophoneData() {
     vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
     if(vadState == VAD_SPEECH) {
         DEBUG_MSG("\n(Vocal) Event detected!\n\n");
