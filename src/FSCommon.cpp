@@ -6,6 +6,7 @@
 #include <SD.h>
 #include "SPILock.h"
 
+#include "MasterLogger.h"
 
 #ifdef SDCARD_USE_SPI1  
 //SPIClass SPI1(HSPI);
@@ -190,6 +191,7 @@ void setupSDCard()
     concurrency::LockGuard g(spiLock);
     if (!SD.begin(SDCARD_CS, SDHandler, 4000000, "/sd", 5, true)) {
         DEBUG_MSG("No SD_MMC card detected\n");
+        MasterLogger::useFallbackFS();
         return ;
     }
     uint8_t cardType = SD.cardType();
