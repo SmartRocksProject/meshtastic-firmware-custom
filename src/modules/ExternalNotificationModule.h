@@ -5,6 +5,18 @@
 #include "configuration.h"
 #ifndef ARCH_PORTDUINO
 #include <NonBlockingRtttl.h>
+#else
+// Noop class for portduino.
+class rtttl
+{
+  public:
+    explicit rtttl() {}
+    static bool isPlaying() { return false; }
+    static void play() {}
+    static void begin(byte a, const char *b){};
+    static void stop() {}
+    static bool done() { return true; }
+};
 #endif
 #include <Arduino.h>
 #include <functional>
@@ -15,7 +27,7 @@
  */
 class ExternalNotificationModule : public SinglePortModule, private concurrency::OSThread
 {
-  uint32_t output = 0;
+    uint32_t output = 0;
 
   public:
     ExternalNotificationModule();
@@ -28,15 +40,23 @@ class ExternalNotificationModule : public SinglePortModule, private concurrency:
 
     void stopNow();
 
-    char pwmRingtone[Constants_DATA_PAYLOAD_LEN] = "a:d=8,o=5,b=125:4d#6,a#,2d#6,16p,g#,4a#,4d#.,p,16g,16a#,d#6,a#,f6,2d#6,16p,c#.6,16c6,16a#,g#.,2a#";
+    void handleGetRingtone(const meshtastic_MeshPacket &req, meshtastic_AdminMessage *response);
+    void handleSetRingtone(const char *from_msg);
 
   protected:
     /** Called to handle a particular incoming message
-    @return ProcessMessage::STOP if you've guaranteed you've handled this message and no other handlers should be considered for it
+    @return ProcessMessage::STOP if you've guaranteed you've handled this message and no other handlers should be considered for
+    it
     */
-    virtual ProcessMessage handleReceived(const MeshPacket &mp) override;
+    virtual ProcessMessage handleReceived(const meshtastic_MeshPacket &mp) override;
 
     virtual int32_t runOnce() override;
+
+    bool isNagging = false;
+
+    virtual AdminMessageHandleResult handleAdminMessageForModule(const meshtastic_MeshPacket &mp,
+                                                                 meshtastic_AdminMessage *request,
+                                                                 meshtastic_AdminMessage *response) override;
 };
 
 extern ExternalNotificationModule *externalNotificationModule;

@@ -28,33 +28,33 @@ void RotaryEncoderInterruptBase::init(
 
     this->rotaryLevelA = digitalRead(this->_pinA);
     this->rotaryLevelB = digitalRead(this->_pinB);
-    DEBUG_MSG("Rotary initialized (%d, %d, %d)\n", this->_pinA, this->_pinB, pinPress);
+    LOG_INFO("Rotary initialized (%d, %d, %d)\n", this->_pinA, this->_pinB, pinPress);
 }
 
 int32_t RotaryEncoderInterruptBase::runOnce()
 {
     InputEvent e;
-    e.inputEvent = ModuleConfig_CannedMessageConfig_InputEventChar_NONE;
+    e.inputEvent = meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE;
     e.source = this->_originName;
 
     if (this->action == ROTARY_ACTION_PRESSED) {
-        DEBUG_MSG("Rotary event Press\n");
+        LOG_DEBUG("Rotary event Press\n");
         e.inputEvent = this->_eventPressed;
     } else if (this->action == ROTARY_ACTION_CW) {
-        DEBUG_MSG("Rotary event CW\n");
+        LOG_DEBUG("Rotary event CW\n");
         e.inputEvent = this->_eventCw;
     } else if (this->action == ROTARY_ACTION_CCW) {
-        DEBUG_MSG("Rotary event CCW\n");
+        LOG_DEBUG("Rotary event CCW\n");
         e.inputEvent = this->_eventCcw;
     }
 
-    if (e.inputEvent != ModuleConfig_CannedMessageConfig_InputEventChar_NONE) {
+    if (e.inputEvent != meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_NONE) {
         this->notifyObservers(&e);
     }
 
     this->action = ROTARY_ACTION_NONE;
 
-    return 30000; // TODO: technically this can be MAX_INT
+    return INT32_MAX;
 }
 
 void RotaryEncoderInterruptBase::intPressHandler()
@@ -104,7 +104,7 @@ RotaryEncoderInterruptBaseStateType RotaryEncoderInterruptBase::intHandler(bool 
             newState = ROTARY_EVENT_OCCURRED;
             if ((this->action != ROTARY_ACTION_PRESSED) && (this->action != action)) {
                 this->action = action;
-                DEBUG_MSG("Rotary action\n");
+                LOG_DEBUG("Rotary action\n");
             }
         }
     } else if (!actualPinRaising && (otherPinLevel == HIGH)) {

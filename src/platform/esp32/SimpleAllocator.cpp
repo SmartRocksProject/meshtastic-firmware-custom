@@ -1,20 +1,26 @@
 #include "SimpleAllocator.h"
 #include "assert.h"
+#include "configuration.h"
 
-
-SimpleAllocator::SimpleAllocator() { reset(); }
+SimpleAllocator::SimpleAllocator()
+{
+    reset();
+}
 
 void *SimpleAllocator::alloc(size_t size)
 {
     assert(nextFree + size <= sizeof(bytes));
     void *res = &bytes[nextFree];
     nextFree += size;
-    Serial.printf("Total simple allocs %u\n", nextFree);
+    LOG_DEBUG("Total simple allocs %u\n", nextFree);
 
     return res;
 }
 
-void SimpleAllocator::reset() { nextFree = 0; }
+void SimpleAllocator::reset()
+{
+    nextFree = 0;
+}
 
 void *operator new(size_t size, SimpleAllocator &p)
 {
@@ -52,7 +58,7 @@ void *operator new(size_t sz) throw(std::bad_alloc)
 void operator delete(void *ptr) throw()
 {
     if (activeAllocator)
-        Serial.println("Warning: leaking an active allocator object"); // We don't properly handle this yet
+        LOG_DEBUG("Warning: leaking an active allocator object\n"); // We don't properly handle this yet
     else
         free(ptr);
 }

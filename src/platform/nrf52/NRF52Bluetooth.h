@@ -1,11 +1,16 @@
 #pragma once
 
-class NRF52Bluetooth
+#include "BluetoothCommon.h"
+#include <Arduino.h>
+
+class NRF52Bluetooth : BluetoothApi
 {
   public:
     void setup();
     void shutdown();
     void clearBonds();
+    bool isConnected();
+    int getRssi();
 
   private:
     static void onConnectionSecured(uint16_t conn_handle);

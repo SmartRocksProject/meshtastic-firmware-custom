@@ -1,5 +1,5 @@
 #pragma once
-#include "../mesh/generated/telemetry.pb.h"
+#include "../mesh/generated/meshtastic/telemetry.pb.h"
 #include "NodeDB.h"
 #include "main.h"
 
@@ -8,7 +8,7 @@
 class TelemetrySensor
 {
   protected:
-    TelemetrySensor(TelemetrySensorType sensorType, const char *sensorName)
+    TelemetrySensor(meshtastic_TelemetrySensorType sensorType, const char *sensorName)
     {
         this->sensorName = sensorName;
         this->sensorType = sensorType;
@@ -16,15 +16,16 @@ class TelemetrySensor
     }
 
     const char *sensorName;
-    TelemetrySensorType sensorType;
+    meshtastic_TelemetrySensorType sensorType;
     unsigned status;
 
-    int32_t initI2CSensor() {
+    int32_t initI2CSensor()
+    {
         if (!status) {
-            DEBUG_MSG("Could not connect to detected %s sensor.\n Removing from nodeTelemetrySensorsMap.\n", sensorName);
+            LOG_WARN("Could not connect to detected %s sensor.\n Removing from nodeTelemetrySensorsMap.\n", sensorName);
             nodeTelemetrySensorsMap[sensorType] = 0;
         } else {
-            DEBUG_MSG("Opened %s sensor on default i2c bus\n", sensorName);
+            LOG_INFO("Opened %s sensor on default i2c bus\n", sensorName);
             setup();
         }
         return DEFAULT_SENSOR_MINIMUM_WAIT_TIME_BETWEEN_READS;
@@ -32,10 +33,8 @@ class TelemetrySensor
     virtual void setup();
 
   public:
-    bool hasSensor() { 
-        return sensorType < sizeof(nodeTelemetrySensorsMap) && nodeTelemetrySensorsMap[sensorType] > 0; 
-    }
+    bool hasSensor() { return sensorType < sizeof(nodeTelemetrySensorsMap) && nodeTelemetrySensorsMap[sensorType] > 0; }
 
     virtual int32_t runOnce() = 0;
-    virtual bool getMetrics(Telemetry *measurement) = 0;
+    virtual bool getMetrics(meshtastic_Telemetry *measurement) = 0;
 };

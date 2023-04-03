@@ -10,7 +10,7 @@
  * If the message is want_ack, then add it to a list of packets to retransmit.
  * If we run out of retransmissions, send a nak packet towards the original client to indicate failure.
  */
-ErrorCode ReliableRouter::send(MeshPacket *p)
+ErrorCode ReliableRouter::send(meshtastic_MeshPacket *p)
 {
     if (p->want_ack) {
         // If someone asks for acks on broadcast, we need the hop limit to be at least one, so that first node that receives our
@@ -27,7 +27,7 @@ ErrorCode ReliableRouter::send(MeshPacket *p)
     return FloodingRouter::send(p);
 }
 
-bool ReliableRouter::shouldFilterReceived(const MeshPacket *p)
+bool ReliableRouter::shouldFilterReceived(const meshtastic_MeshPacket *p)
 {
     // Note: do not use getFrom() here, because we want to ignore messages sent from phone
     if (p->from == getNodeNum()) {
@@ -38,29 +38,29 @@ bool ReliableRouter::shouldFilterReceived(const MeshPacket *p)
         // the original sending process.
 
         // This "optimization", does save lots of airtime. For DMs, you also get a real ACK back
-	// from the intended recipient.
+        // from the intended recipient.
         auto key = GlobalPacketId(getFrom(p), p->id);
         auto old = findPendingPacket(key);
         if (old) {
-            DEBUG_MSG("generating implicit ack\n");
+            LOG_DEBUG("generating implicit ack\n");
             // NOTE: we do NOT check p->wantAck here because p is the INCOMING rebroadcast and that packet is not expected to be
             // marked as wantAck
-            sendAckNak(Routing_Error_NONE, getFrom(p), p->id, old->packet->channel);
+            sendAckNak(meshtastic_Routing_Error_NONE, getFrom(p), p->id, old->packet->channel);
 
             stopRetransmission(key);
         } else {
-            DEBUG_MSG("didn't find pending packet\n");
+            LOG_DEBUG("didn't find pending packet\n");
         }
     }
 
     /* Resend implicit ACKs for repeated packets (assuming the original packet was sent with HOP_RELIABLE)
-    * this way if an implicit ACK is dropped and a packet is resent we'll rebroadcast again.
-    * Resending real ACKs is omitted, as you might receive a packet multiple times due to flooding and 
-    * flooding this ACK back to the original sender already adds redundancy. */ 
+     * this way if an implicit ACK is dropped and a packet is resent we'll rebroadcast again.
+     * Resending real ACKs is omitted, as you might receive a packet multiple times due to flooding and
+     * flooding this ACK back to the original sender already adds redundancy. */
     if (wasSeenRecently(p, false) && p->hop_limit == HOP_RELIABLE && !MeshModule::currentReply && p->to != nodeDB.getNodeNum()) {
         // retransmission on broadcast has hop_limit still equal to HOP_RELIABLE
-        DEBUG_MSG("Resending implicit ack for a repeated floodmsg\n");
-        MeshPacket *tosend = packetPool.allocCopy(*p);
+        LOG_DEBUG("Resending implicit ack for a repeated floodmsg\n");
+        meshtastic_MeshPacket *tosend = packetPool.allocCopy(*p);
         tosend->hop_limit--; // bump down the hop count
         Router::send(tosend);
     }
@@ -80,35 +80,34 @@ bool ReliableRouter::shouldFilterReceived(const MeshPacket *p)
  *
  * Otherwise, let superclass handle it.
  */
-void ReliableRouter::sniffReceived(const MeshPacket *p, const Routing *c)
+void ReliableRouter::sniffReceived(const meshtastic_MeshPacket *p, const meshtastic_Routing *c)
 {
     NodeNum ourNode = getNodeNum();
 
     if (p->to == ourNode) { // ignore ack/nak/want_ack packets that are not address to us (we only handle 0 hop reliability)
         if (p->want_ack) {
             if (MeshModule::currentReply)
-                DEBUG_MSG("Some other module has replied to this message, no need for a 2nd ack\n");
+                LOG_DEBUG("Some other module has replied to this message, no need for a 2nd ack\n");
+            else if (p->which_payload_variant == meshtastic_MeshPacket_decoded_tag)
+                sendAckNak(meshtastic_Routing_Error_NONE, getFrom(p), p->id, p->channel);
             else
-                if (p->which_payload_variant == MeshPacket_decoded_tag)
-                    sendAckNak(Routing_Error_NONE, getFrom(p), p->id, p->channel);
-                else
-                    // Send a 'NO_CHANNEL' error on the primary channel if want_ack packet destined for us cannot be decoded
-                    sendAckNak(Routing_Error_NO_CHANNEL, getFrom(p), p->id, channels.getPrimaryIndex());
+                // Send a 'NO_CHANNEL' error on the primary channel if want_ack packet destined for us cannot be decoded
+                sendAckNak(meshtastic_Routing_Error_NO_CHANNEL, getFrom(p), p->id, channels.getPrimaryIndex());
         }
 
         // We consider an ack to be either a !routing packet with a request ID or a routing packet with !error
-        PacketId ackId = ((c && c->error_reason == Routing_Error_NONE) || !c) ? p->decoded.request_id : 0;
+        PacketId ackId = ((c && c->error_reason == meshtastic_Routing_Error_NONE) || !c) ? p->decoded.request_id : 0;
 
         // A nak is a routing packt that has an  error code
-        PacketId nakId = (c && c->error_reason != Routing_Error_NONE) ? p->decoded.request_id : 0;
+        PacketId nakId = (c && c->error_reason != meshtastic_Routing_Error_NONE) ? p->decoded.request_id : 0;
 
         // We intentionally don't check wasSeenRecently, because it is harmless to delete non existent retransmission records
         if (ackId || nakId) {
             if (ackId) {
-                DEBUG_MSG("Received an ack for 0x%x, stopping retransmissions\n", ackId);
+                LOG_DEBUG("Received an ack for 0x%x, stopping retransmissions\n", ackId);
                 stopRetransmission(p->to, ackId);
             } else {
-                DEBUG_MSG("Received a nak for 0x%x, stopping retransmissions\n", nakId);
+                LOG_DEBUG("Received a nak for 0x%x, stopping retransmissions\n", nakId);
                 stopRetransmission(p->to, nakId);
             }
         }
@@ -120,7 +119,7 @@ void ReliableRouter::sniffReceived(const MeshPacket *p, const Routing *c)
 
 #define NUM_RETRANSMISSIONS 3
 
-PendingPacket::PendingPacket(MeshPacket *p)
+PendingPacket::PendingPacket(meshtastic_MeshPacket *p)
 {
     packet = p;
     numRetransmissions = NUM_RETRANSMISSIONS - 1; // We subtract one, because we assume the user just did the first send
@@ -158,7 +157,7 @@ bool ReliableRouter::stopRetransmission(GlobalPacketId key)
 /**
  * Add p to the list of packets to retransmit occasionally.  We will free it once we stop retransmitting.
  */
-PendingPacket *ReliableRouter::startRetransmission(MeshPacket *p)
+PendingPacket *ReliableRouter::startRetransmission(meshtastic_MeshPacket *p)
 {
     auto id = GlobalPacketId(p);
     auto rec = PendingPacket(p);
@@ -190,14 +189,14 @@ int32_t ReliableRouter::doRetransmissions()
         // FIXME, handle 51 day rolloever here!!!
         if (p.nextTxMsec <= now) {
             if (p.numRetransmissions == 0) {
-                DEBUG_MSG("Reliable send failed, returning a nak for fr=0x%x,to=0x%x,id=0x%x\n", p.packet->from, p.packet->to,
+                LOG_DEBUG("Reliable send failed, returning a nak for fr=0x%x,to=0x%x,id=0x%x\n", p.packet->from, p.packet->to,
                           p.packet->id);
-                sendAckNak(Routing_Error_MAX_RETRANSMIT, getFrom(p.packet), p.packet->id, p.packet->channel);
+                sendAckNak(meshtastic_Routing_Error_MAX_RETRANSMIT, getFrom(p.packet), p.packet->id, p.packet->channel);
                 // Note: we don't stop retransmission here, instead the Nak packet gets processed in sniffReceived
                 stopRetransmission(it->first);
                 stillValid = false; // just deleted it
             } else {
-                DEBUG_MSG("Sending reliable retransmission fr=0x%x,to=0x%x,id=0x%x, tries left=%d\n", p.packet->from,
+                LOG_DEBUG("Sending reliable retransmission fr=0x%x,to=0x%x,id=0x%x, tries left=%d\n", p.packet->from,
                           p.packet->to, p.packet->id, p.numRetransmissions);
 
                 // Note: we call the superclass version because we don't want to have our version of send() add a new
@@ -226,7 +225,7 @@ void ReliableRouter::setNextTx(PendingPacket *pending)
     assert(iface);
     auto d = iface->getRetransmissionMsec(pending->packet);
     pending->nextTxMsec = millis() + d;
-    DEBUG_MSG("Setting next retransmission in %u msecs: ", d);
+    LOG_DEBUG("Setting next retransmission in %u msecs: ", d);
     printPacket("", pending->packet);
     setReceivedMessage(); // Run ASAP, so we can figure out our correct sleep time
 }

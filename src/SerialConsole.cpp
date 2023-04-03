@@ -20,9 +20,7 @@ void consolePrintf(const char *format, ...)
     va_start(arg, format);
     console->vprintf(format, arg);
     va_end(arg);
-#ifdef ARCH_ESP32
     console->flush();
-#endif
 }
 
 SerialConsole::SerialConsole() : StreamAPI(&Port), RedirectablePrint(&Port), concurrency::OSThread("SerialConsole")
@@ -33,7 +31,7 @@ SerialConsole::SerialConsole() : StreamAPI(&Port), RedirectablePrint(&Port), con
                       // setDestination(&noopPrint); for testing, try turning off 'all' debug output and see what leaks
 
     Port.begin(SERIAL_BAUD);
-#ifdef ARCH_NRF52
+#if defined(ARCH_NRF52) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
     time_t timeout = millis();
     while (!Port) {
         if ((millis() - timeout) < 5000) {
@@ -49,6 +47,11 @@ SerialConsole::SerialConsole() : StreamAPI(&Port), RedirectablePrint(&Port), con
 int32_t SerialConsole::runOnce()
 {
     return runOncePart();
+}
+
+void SerialConsole::flush()
+{
+    Port.flush();
 }
 
 // For the serial port we can't really detect if any client is on the other side, so instead just look for recent messages
@@ -72,7 +75,7 @@ bool SerialConsole::handleToRadio(const uint8_t *buf, size_t len)
         canWrite = true;
 
         return StreamAPI::handleToRadio(buf, len);
-    }else{
+    } else {
         return false;
     }
 }

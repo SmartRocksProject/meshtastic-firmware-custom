@@ -5,7 +5,7 @@
 
 enum { r0, r1, r2, r3, r12, lr, pc, psr };
 
-// we can't use the regular DEBUG_MSG for these crash dumps because it depends on threading still being running.  Instead use the
+// we can't use the regular LOG_DEBUG for these crash dumps because it depends on threading still being running.  Instead use the
 // segger in memory tool
 #define FAULT_MSG(...) SEGGER_MSG(__VA_ARGS__)
 
@@ -23,7 +23,7 @@ static void printUsageErrorMsg(uint32_t cfsr)
     else if ((cfsr & (1 << 0)) != 0)
         FAULT_MSG("Invalid instruction\n");
     else
-        FAULT_MSG("FIXME add to printUsageErrorMsg!\n");  
+        FAULT_MSG("FIXME add to printUsageErrorMsg!\n");
 }
 
 static void printBusErrorMsg(uint32_t cfsr)
@@ -94,22 +94,19 @@ extern "C" void HardFault_Handler(void)
 
 /* The prototype shows it is a naked function - in effect this is just an
 assembly function. */
-extern "C"  void HardFault_Handler( void ) __attribute__( ( naked ) );
+extern "C" void HardFault_Handler(void) __attribute__((naked));
 
 /* The fault handler implementation calls a function called
 prvGetRegistersFromStack(). */
-extern "C"  void HardFault_Handler(void)
+extern "C" void HardFault_Handler(void)
 {
-    __asm volatile
-    (
-        " tst lr, #4                                                \n"
-        " ite eq                                                    \n"
-        " mrseq r0, msp                                             \n"
-        " mrsne r0, psp                                             \n"
-        " ldr r1, [r0, #24]                                         \n"
-        " ldr r2, handler2_address_const                            \n"
-        " bx r2                                                     \n"
-        " handler2_address_const: .word HardFault_Impl    \n"
-    );
+    __asm volatile(" tst lr, #4                                                \n"
+                   " ite eq                                                    \n"
+                   " mrseq r0, msp                                             \n"
+                   " mrsne r0, psp                                             \n"
+                   " ldr r1, [r0, #24]                                         \n"
+                   " ldr r2, handler2_address_const                            \n"
+                   " bx r2                                                     \n"
+                   " handler2_address_const: .word HardFault_Impl    \n");
 }
 #endif

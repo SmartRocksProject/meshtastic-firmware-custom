@@ -4,6 +4,7 @@
 
 #include "concurrency/OSThread.h"
 #include "mesh/Channels.h"
+#include "mesh/generated/meshtastic/mqtt.pb.h"
 #include <PubSubClient.h>
 #if HAS_WIFI
 #include <WiFiClient.h>
@@ -11,6 +12,8 @@
 #if HAS_ETHERNET
 #include <EthernetClient.h>
 #endif
+
+#define MAX_MQTT_QUEUE 16
 
 /**
  * Our wrapper/singleton for sending/receiving MQTT "udp" packets.  This object isolates the MQTT protocol implementation from
@@ -43,15 +46,19 @@ class MQTT : private concurrency::OSThread
      * Note: for messages we are forwarding on the mesh that we can't find the channel for (because we don't have the keys), we
      * can not forward those messages to the cloud - becuase no way to find a global channel ID.
      */
-    void onSend(const MeshPacket &mp, ChannelIndex chIndex);
+    void onSend(const meshtastic_MeshPacket &mp, ChannelIndex chIndex);
 
     /** Attempt to connect to server if necessary
      */
     void reconnect();
 
     bool connected();
-    
+
   protected:
+    PointerQueue<meshtastic_ServiceEnvelope> mqttQueue;
+
+    int reconnectCount = 0;
+
     virtual int32_t runOnce() override;
 
   private:
@@ -70,10 +77,10 @@ class MQTT : private concurrency::OSThread
     void onPublish(char *topic, byte *payload, unsigned int length);
 
     /// Called when a new publish arrives from the MQTT server
-    std::string downstreamPacketToJson(MeshPacket *mp);
+    std::string downstreamPacketToJson(meshtastic_MeshPacket *mp);
 
     /// Return 0 if sleep is okay, veto sleep if we are connected to pubsub server
-    // int preflightSleepCb(void *unused = NULL) { return pubSub.connected() ? 1 : 0; }    
+    // int preflightSleepCb(void *unused = NULL) { return pubSub.connected() ? 1 : 0; }
 };
 
 void mqttInit();

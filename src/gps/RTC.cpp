@@ -20,7 +20,7 @@ void readFromRTC()
 {
     struct timeval tv; /* btw settimeofday() is helpfull here too*/
 #ifdef RV3028_RTC
-    if(rtc_found == RV3028_RTC) {
+    if (rtc_found == RV3028_RTC) {
         uint32_t now = millis();
         Melopero_RV3028 rtc;
         rtc.initI2C();
@@ -33,7 +33,7 @@ void readFromRTC()
         t.tm_sec = rtc.getSecond();
         tv.tv_sec = mktime(&t);
         tv.tv_usec = 0;
-        DEBUG_MSG("Read RTC time from RV3028 as %ld\n", tv.tv_sec);
+        LOG_DEBUG("Read RTC time from RV3028 as %ld\n", tv.tv_sec);
         timeStartMsec = now;
         zeroOffsetSecs = tv.tv_sec;
         if (currentQuality == RTCQualityNone) {
@@ -41,7 +41,7 @@ void readFromRTC()
         }
     }
 #elif defined(PCF8563_RTC)
-    if(rtc_found == PCF8563_RTC) {
+    if (rtc_found == PCF8563_RTC) {
         uint32_t now = millis();
         PCF8563_Class rtc;
 #ifdef RTC_USE_WIRE1
@@ -59,17 +59,17 @@ void readFromRTC()
         t.tm_sec = tc.second;
         tv.tv_sec = mktime(&t);
         tv.tv_usec = 0;
-        DEBUG_MSG("Read RTC time from PCF8563 as %ld\n", tv.tv_sec);
+        LOG_DEBUG("Read RTC time from PCF8563 as %ld\n", tv.tv_sec);
         timeStartMsec = now;
         zeroOffsetSecs = tv.tv_sec;
         if (currentQuality == RTCQualityNone) {
             currentQuality = RTCQualityDevice;
         }
     }
-#else 
+#else
     if (!gettimeofday(&tv, NULL)) {
         uint32_t now = millis();
-        DEBUG_MSG("Read RTC time as %ld\n", tv.tv_sec);
+        LOG_DEBUG("Read RTC time as %ld\n", tv.tv_sec);
         timeStartMsec = now;
         zeroOffsetSecs = tv.tv_sec;
     }
@@ -86,13 +86,12 @@ bool perhapsSetRTC(RTCQuality q, const struct timeval *tv)
     if (q > currentQuality) {
         currentQuality = q;
         shouldSet = true;
-        DEBUG_MSG("Upgrading time to RTC %ld secs (quality %d)\n", tv->tv_sec, q);
-    } else if(q == RTCQualityGPS && (now - lastSetMsec) > (12 * 60 * 60 * 1000UL)) {
+        LOG_DEBUG("Upgrading time to RTC %ld secs (quality %d)\n", tv->tv_sec, q);
+    } else if (q == RTCQualityGPS && (now - lastSetMsec) > (12 * 60 * 60 * 1000UL)) {
         // Every 12 hrs we will slam in a new GPS time, to correct for local RTC clock drift
         shouldSet = true;
-        DEBUG_MSG("Reapplying external time to correct clock drift %ld secs\n", tv->tv_sec);
-    }
-    else
+        LOG_DEBUG("Reapplying external time to correct clock drift %ld secs\n", tv->tv_sec);
+    } else
         shouldSet = false;
 
     if (shouldSet) {
@@ -104,24 +103,26 @@ bool perhapsSetRTC(RTCQuality q, const struct timeval *tv)
 
         // If this platform has a setable RTC, set it
 #ifdef RV3028_RTC
-        if(rtc_found == RV3028_RTC) {
+        if (rtc_found == RV3028_RTC) {
             Melopero_RV3028 rtc;
             rtc.initI2C();
             tm *t = localtime(&tv->tv_sec);
             rtc.setTime(t->tm_year + 1900, t->tm_mon + 1, t->tm_wday, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-            DEBUG_MSG("RV3028_RTC setTime %02d-%02d-%02d %02d:%02d:%02d %ld\n", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, tv->tv_sec);
+            LOG_DEBUG("RV3028_RTC setTime %02d-%02d-%02d %02d:%02d:%02d %ld\n", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+                      t->tm_hour, t->tm_min, t->tm_sec, tv->tv_sec);
         }
 #elif defined(PCF8563_RTC)
-        if(rtc_found == PCF8563_RTC) {
+        if (rtc_found == PCF8563_RTC) {
             PCF8563_Class rtc;
 #ifdef RTC_USE_WIRE1
-        rtc.begin(Wire1);
+            rtc.begin(Wire1);
 #else
-        rtc.begin();
+            rtc.begin();
 #endif
             tm *t = localtime(&tv->tv_sec);
             rtc.setDateTime(t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-            DEBUG_MSG("PCF8563_RTC setDateTime %02d-%02d-%02d %02d:%02d:%02d %ld\n", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, tv->tv_sec);
+            LOG_DEBUG("PCF8563_RTC setDateTime %02d-%02d-%02d %02d:%02d:%02d %ld\n", t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+                      t->tm_hour, t->tm_min, t->tm_sec, tv->tv_sec);
         }
 #elif defined(ARCH_ESP32)
         settimeofday(tv, NULL);
@@ -149,9 +150,9 @@ bool perhapsSetRTC(RTCQuality q, struct tm &t)
     tv.tv_sec = res;
     tv.tv_usec = 0; // time.centisecond() * (10 / 1000);
 
-    // DEBUG_MSG("Got time from GPS month=%d, year=%d, unixtime=%ld\n", t.tm_mon, t.tm_year, tv.tv_sec);
+    // LOG_DEBUG("Got time from GPS month=%d, year=%d, unixtime=%ld\n", t.tm_mon, t.tm_year, tv.tv_sec);
     if (t.tm_year < 0 || t.tm_year >= 300) {
-        // DEBUG_MSG("Ignoring invalid GPS month=%d, year=%d, unixtime=%ld\n", t.tm_mon, t.tm_year, tv.tv_sec);
+        // LOG_DEBUG("Ignoring invalid GPS month=%d, year=%d, unixtime=%ld\n", t.tm_mon, t.tm_year, tv.tv_sec);
         return false;
     } else {
         return perhapsSetRTC(q, &tv);
@@ -160,7 +161,7 @@ bool perhapsSetRTC(RTCQuality q, struct tm &t)
 
 uint32_t getTime()
 {
-    return (((uint32_t) millis() - timeStartMsec) / 1000) + zeroOffsetSecs;
+    return (((uint32_t)millis() - timeStartMsec) / 1000) + zeroOffsetSecs;
 }
 
 uint32_t getValidTime(RTCQuality minQuality)
