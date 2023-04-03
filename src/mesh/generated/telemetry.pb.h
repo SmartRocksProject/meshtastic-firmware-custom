@@ -37,7 +37,9 @@ typedef enum _TelemetrySensorType {
     /* 3-Axis magnetic sensor */
     TelemetrySensorType_QMC5883L = 11,
     /* High accuracy temperature and humidity */
-    TelemetrySensorType_SHT31 = 12
+    TelemetrySensorType_SHT31 = 12,
+    TelemetrySensorType_GS1LF = 13,
+    TelemetrySensorType_NUM_SENSORS
 } TelemetrySensorType;
 
 /* Struct definitions */
@@ -93,8 +95,8 @@ extern "C" {
 
 /* Helper constants for enums */
 #define _TelemetrySensorType_MIN TelemetrySensorType_SENSOR_UNSET
-#define _TelemetrySensorType_MAX TelemetrySensorType_SHT31
-#define _TelemetrySensorType_ARRAYSIZE ((TelemetrySensorType)(TelemetrySensorType_SHT31+1))
+#define _TelemetrySensorType_MAX TelemetrySensorType_NUM_SENSORS - 1
+#define _TelemetrySensorType_ARRAYSIZE ((TelemetrySensorType)(TelemetrySensorType_NUM_SENSORS))
 
 
 

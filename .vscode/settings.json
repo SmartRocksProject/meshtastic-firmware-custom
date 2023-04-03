@@ -54,7 +54,17 @@
         "esp_nimble_hci.h": "c",
         "map": "cpp",
         "random": "cpp",
-        "*.tpp": "cpp"
+        "*.tpp": "cpp",
+        "audio_common.h": "c",
+        "audio_alc.h": "c",
+        "audio_forge.h": "c",
+        "esp_downmix.h": "c",
+        "hls_playlist.h": "c",
+        "esp_alc.h": "c",
+        "hls_parse.h": "c",
+        "board_pins_config.h": "c",
+        "tone_partition.h": "c",
+        "tone_stream.h": "c"
     },
     "cSpell.words": [
         "Blox",

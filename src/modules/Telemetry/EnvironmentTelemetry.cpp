@@ -92,9 +92,8 @@ int32_t EnvironmentTelemetryModule::runOnce()
                 result = ina219Sensor.runOnce();
             if (shtc3Sensor.hasSensor())
                 result = shtc3Sensor.runOnce();
-            if (lps22hbSensor.hasSensor()) {
+            if (lps22hbSensor.hasSensor())
                 result = lps22hbSensor.runOnce();
-            }
             if (sht31Sensor.hasSensor())
                 result = sht31Sensor.runOnce();
         }

@@ -217,8 +217,14 @@ void scanI2Cdevice()
                 DEBUG_MSG("QMC5883L Highrate 3-Axis magnetic sensor found\n");
                 nodeTelemetrySensorsMap[TelemetrySensorType_QMC5883L] = addr;
             }
+
+            // ADS1115 for Geophone
+            if(addr == GS1LF_ADDR) {
+                DEBUG_MSG("GS1LF geophone sensor found\n");
+                nodeTelemetrySensorsMap[TelemetrySensorType_GS1LF] = addr;
+            }
         } else if (err == 4) {
-            DEBUG_MSG("Unknow error at address 0x%x\n", addr);
+            DEBUG_MSG("Unknown error at address 0x%x\n", addr);
         }
     }
 

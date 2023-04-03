@@ -43,6 +43,16 @@
 
 #define SDCARD_CS                   SPI_CS
 
+#define ADS1115_ALERT_PIN           (4)
+
+#define I2S_SCK                     (32)
+#define I2S_WS                      (15)
+#define I2S_SD                      (33)
+#define I2S_LR                      (25)
+
+// Uncomment below to enable file logging and node sharing.
+#define ACTIVITY_LOG_TO_FILE
+
 // Leave undefined to disable our PMU IRQ handler.  DO NOT ENABLE THIS because the pmuirq can cause sperious interrupts
 // and waking from light sleep
 // #define PMU_IRQ 35

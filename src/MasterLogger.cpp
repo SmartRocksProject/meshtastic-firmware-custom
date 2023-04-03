@@ -8,7 +8,11 @@
 #include <cstdio>
 #include <ctime>
 
+#include "GPSStatus.h"
+#include "RTC.h"
 #include "SPILock.h"
+
+extern meshtastic::GPSStatus *gpsStatus;
 
 FS* MasterLogger::filesystem = &SD;
 
@@ -46,20 +50,22 @@ void MasterLogger::writeString(const char* message, ...) {
 }
 
 void MasterLogger::writeData(LogData& data) {
-    // 4K should be enough space for a log entry...
-    const int messageMaxLength = 4000;
+    // 200 should be enough space for a log entry...
+    const int messageMaxLength = 200;
     char fmtMessage[messageMaxLength];
     memset(fmtMessage, 0, sizeof(fmtMessage));
 
-    char timeString[100];
+    char timeString[50];
     struct tm ts = *localtime(&data.unixTimeStamp);
-    strftime(timeString, sizeof(timeString), "%a %Y-%m-%d %H:%M:%S %Z", &ts);
+    strftime(timeString, sizeof(timeString), "%Y %m %d %H %M %S %Z", &ts); // 23
 
-    GeoCoord coord = data.gpsData;
+    GeoCoord coord = GeoCoord(data.gpsData.latitude, data.gpsData.longitude, data.gpsData.altitude);
+    // Order: year month day hour minute second timezone detectionType
+    //        latDeg latMin latSec latCP lonDeg lonMin lonSec lonCP
     snprintf(
         fmtMessage, messageMaxLength,
-        "[%s] %s activity detected at (%d°%d'%d\"%c, %d°%d'%d\"%c)",
-        timeString, data.detectionType == LogData::DETECTION_TYPE_HUMAN ? "Human" : "Vehicular",
+        "%s %s %d %d %d %c %d %d %d %c",
+        timeString, data.detectionType == LogData::DETECTION_TYPE_SEISMIC ? "S" : "V",
         coord.getDMSLatDeg(), coord.getDMSLatMin(), coord.getDMSLatSec(), coord.getDMSLatCP(),
         coord.getDMSLonDeg(), coord.getDMSLonMin(), coord.getDMSLonSec(), coord.getDMSLonCP()
     );
@@ -73,6 +79,18 @@ void MasterLogger::writeData(LogData& data) {
             masterFile.close();
         }
     }
+}
+
+void MasterLogger::writeActivity(LogData::DetectionType detectionType) {
+    MasterLogger::LogData data;
+    data.gpsData = {
+        gpsStatus->getLatitude(),
+        gpsStatus->getLongitude(),
+        gpsStatus->getAltitude()
+    };
+    data.unixTimeStamp = getTime();
+    data.detectionType = detectionType;
+    writeData(data);
 }
 
 bool MasterLogger::readLog(String& outLog) {
