@@ -1,17 +1,19 @@
 #include "GS1LFSensor.h"
 
-#include "mesh/generated/telemetry.pb.h"
+#include <Wire.h>
+
+#include "mesh/generated/meshtastic/telemetry.pb.h"
 #include "main.h"
 
 bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
-    DEBUG_MSG("Init sensor: GS1LFSensor\n");
+    LOG_INFO("Init sensor: GS1LFSensor\n");
     if(!hasSensor()) {
-        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
+        LOG_INFO("Could not find sensor: GS1LFSensor\n");
         return false;
     }
 
     if(!ADS.begin(I2C_SDA, I2C_SCL)) {
-        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
+        LOG_INFO("Could not find sensor: GS1LFSensor\n");
         return false;
     }
 
@@ -46,7 +48,13 @@ void GS1LFSensor::setContinuousMode(bool continuousMode) {
 }
 
 bool GS1LFSensor::hasSensor() {
-    return TelemetrySensorType_GS1LF < sizeof(nodeTelemetrySensorsMap) && nodeTelemetrySensorsMap[TelemetrySensorType_GS1LF] > 0;
+    // Check I2C wire for GS1LFSensor address
+    Wire.beginTransmission(GS1LF_ADDR);
+    if(Wire.endTransmission() == 0) {
+        LOG_DEBUG("GS1LFSensor found at address 0x%x\n", GS1LF_ADDR);
+        return true;
+    }
+    return false;
 }
 
 bool GS1LFSensor::readVoltage(float& out_voltage) {
@@ -55,6 +63,6 @@ bool GS1LFSensor::readVoltage(float& out_voltage) {
         return false;
     }
     out_voltage = voltage;
-    //DEBUG_MSG("GS1LFSensor::readVoltage: %f Volts\n", voltage);
+    //LOG_INFO("GS1LFSensor::readVoltage: %f Volts\n", voltage);
     return true;
 }

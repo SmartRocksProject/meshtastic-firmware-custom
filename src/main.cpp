@@ -3,12 +3,12 @@
 #include "MeshService.h"
 #include "NodeDB.h"
 #include "PowerFSM.h"
+#include "ReliableRouter.h"
 #include "airtime.h"
 #include "buzz.h"
 #include "configuration.h"
 #include "error.h"
 #include "power.h"
-#include "ReliableRouter.h"
 // #include "debug.h"
 #include "FSCommon.h"
 #include "RTC.h"
@@ -27,21 +27,27 @@
 #include <Wire.h>
 // #include <driver/rtc_io.h>
 
-#include "mesh/http/WiFiAPClient.h"
 #include "mesh/eth/ethClient.h"
+#include "mesh/http/WiFiAPClient.h"
 
 #ifdef ARCH_ESP32
 #include "mesh/http/WebServer.h"
 #include "nimble/NimbleBluetooth.h"
+NimbleBluetooth *nimbleBluetooth;
+#endif
+
+#ifdef ARCH_NRF52
+#include "NRF52Bluetooth.h"
+NRF52Bluetooth *nrf52Bluetooth;
 #endif
 
 #if HAS_WIFI
-#include "mesh/wifi/WiFiServerAPI.h"
+#include "mesh/api/WiFiServerAPI.h"
 #include "mqtt/MQTT.h"
 #endif
 
 #if HAS_ETHERNET
-#include "mesh/eth/ethServerAPI.h"
+#include "mesh/api/ethServerAPI.h"
 #include "mqtt/MQTT.h"
 #endif
 
@@ -87,7 +93,7 @@ uint8_t rtc_found;
 
 // Keystore Chips
 uint8_t keystore_found;
-#ifndef ARCH_PORTDUINO
+#if !defined(ARCH_PORTDUINO) && !defined(ARCH_STM32WL)
 ATECCX08A atecc;
 #endif
 
@@ -98,7 +104,8 @@ uint32_t serialSinceMsec;
 bool pmu_found;
 
 // Array map of sensor types (as array index) and i2c address as value we'll find in the i2c scan
-uint8_t nodeTelemetrySensorsMap[_TelemetrySensorType_MAX + 1] = { 0 }; // one is enough, missing elements will be initialized to 0 anyway.
+uint8_t nodeTelemetrySensorsMap[_meshtastic_TelemetrySensorType_MAX + 1] = {
+    0}; // one is enough, missing elements will be initialized to 0 anyway.
 
 Router *router = NULL; // Users of router don't care what sort of subclass implements that API
 
@@ -110,12 +117,12 @@ const char *getDeviceName()
 
     // Meshtastic_ab3c or Shortname_abcd
     static char name[20];
-    sprintf(name, "%02x%02x", dmac[4], dmac[5]);
+    snprintf(name, sizeof(name), "%02x%02x", dmac[4], dmac[5]);
     // if the shortname exists and is NOT the new default of ab3c, use it for BLE name.
     if ((owner.short_name != NULL) && (strcmp(owner.short_name, name) != 0)) {
-        sprintf(name, "%s_%02x%02x", owner.short_name, dmac[4], dmac[5]);
+        snprintf(name, sizeof(name), "%s_%02x%02x", owner.short_name, dmac[4], dmac[5]);
     } else {
-        sprintf(name, "Meshtastic_%02x%02x", dmac[4], dmac[5]);
+        snprintf(name, sizeof(name), "Meshtastic_%02x%02x", dmac[4], dmac[5]);
     }
     return name;
 }
@@ -126,6 +133,17 @@ static int32_t ledBlinker()
     ledOn ^= 1;
 
     setLed(ledOn);
+
+#ifdef ARCH_ESP32
+    auto newHeap = ESP.getFreeHeap();
+    if (newHeap < 11000) {
+        LOG_DEBUG("\n\n====== heap too low [11000] -> reboot in 1s ======\n\n");
+#ifdef HAS_SCREEN
+        screen->startRebootScreen();
+#endif
+        rebootAtMsec = millis() + 900;
+    }
+#endif
 
     // have a very sparse duty cycle of LED being on, unless charging, then blink 0.5Hz square wave rate to indicate that
     return powerStatus->getIsCharging() ? 1000 : (ledOn ? 1 : 1000);
@@ -169,12 +187,12 @@ void setup()
 #endif
 
 #ifdef DEBUG_PORT
-        consoleInit(); // Set serial baud rate and init our mesh console
+    consoleInit(); // Set serial baud rate and init our mesh console
 #endif
 
     serialSinceMsec = millis();
 
-    DEBUG_MSG("\n\n//\\ E S H T /\\ S T / C\n\n");
+    LOG_INFO("\n\n//\\ E S H T /\\ S T / C\n\n");
 
     initDeepSleep();
 
@@ -239,7 +257,7 @@ void setup()
 #ifdef RAK4630
     // We need to enable 3.3V periphery in order to scan it
     pinMode(PIN_3V3_EN, OUTPUT);
-    digitalWrite(PIN_3V3_EN, 1);
+    digitalWrite(PIN_3V3_EN, HIGH);
 #endif
 
     // Currently only the tbeam has a PMU
@@ -254,9 +272,9 @@ void setup()
     // In T-Beam-S3-core, the I2C device cannot be scanned before power initialization, otherwise the device will be stuck
     // PCF8563 RTC in tbeam-s3 uses Wire1 to share I2C bus
     Wire1.beginTransmission(PCF8563_RTC);
-    if (Wire1.endTransmission() == 0){
+    if (Wire1.endTransmission() == 0) {
         rtc_found = PCF8563_RTC;
-        DEBUG_MSG("PCF8563 RTC found\n");
+        LOG_INFO("PCF8563 RTC found\n");
     }
 #endif
 
@@ -278,7 +296,7 @@ void setup()
 #endif
 
     // Hello
-    DEBUG_MSG("Meshtastic hwvendor=%d, swver=%s\n", HW_VENDOR, optstr(APP_VERSION));
+    LOG_INFO("Meshtastic hwvendor=%d, swver=%s\n", HW_VENDOR, optstr(APP_VERSION));
 
 #ifdef ARCH_ESP32
     // Don't init display if we don't have one or we are waking headless due to a timer event
@@ -295,11 +313,19 @@ void setup()
     // but we need to do this after main cpu iniot (esp32setup), because we need the random seed set
     nodeDB.init();
 
+    // If we're taking on the repeater role, use flood router
+    if (config.device.role == meshtastic_Config_DeviceConfig_Role_REPEATER)
+        router = new FloodingRouter();
+
     playStartMelody();
 
     // fixed screen override?
-    if (config.display.oled != Config_DisplayConfig_OledType_OLED_AUTO)
+    if (config.display.oled != meshtastic_Config_DisplayConfig_OledType_OLED_AUTO)
         screen_model = config.display.oled;
+
+#if defined(USE_SH1107)
+    screen_model = Config_DisplayConfig_OledType_OLED_SH1107; // set dimension of 128x128
+#endif
 
     // Init our SPI controller (must be before screen and lora)
     initSPI();
@@ -325,7 +351,7 @@ void setup()
     if (gps)
         gpsStatus->observe(&gps->newStatus);
     else
-        DEBUG_MSG("Warning: No GPS found - running without GPS\n");
+        LOG_WARN("No GPS found - running without GPS\n");
 
     nodeStatus->observe(&nodeDB.newStatus);
 
@@ -337,7 +363,7 @@ void setup()
     // Do this after service.init (because that clears error_code)
 #ifdef HAS_PMU
     if (!pmu_found)
-        RECORD_CRITICALERROR(CriticalErrorCode_NO_AXP192); // Record a hardware fault for missing hardware
+        RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_NO_AXP192); // Record a hardware fault for missing hardware
 #endif
 
         // Don't call screen setup until after nodedb is setup (because we need
@@ -355,7 +381,7 @@ void setup()
 
     // ONCE we will factory reset the GPS for bug #327
     if (gps && !devicestate.did_gps_reset) {
-        DEBUG_MSG("GPS FactoryReset requested\n");
+        LOG_WARN("GPS FactoryReset requested\n");
         if (gps->factoryReset()) { // If we don't succeed try again next time
             devicestate.did_gps_reset = true;
             nodeDB.saveToDisk(SEGMENT_DEVICESTATE);
@@ -370,28 +396,28 @@ void setup()
 
     // radio init MUST BE AFTER service.init, so we have our radio config settings (from nodedb init)
 
-#if defined(RF95_IRQ)
+#if !HAS_RADIO && defined(ARCH_PORTDUINO)
     if (!rIf) {
-        rIf = new RF95Interface(RF95_NSS, RF95_IRQ, RF95_RESET, SPI);
+        rIf = new SimRadio;
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find RF95 radio\n");
+            LOG_WARN("Failed to find simulated radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("RF95 Radio init succeeded, using RF95 radio\n");
+            LOG_INFO("Using SIMULATED radio!\n");
         }
     }
 #endif
 
-#if defined(USE_SX1280)
+#if defined(RF95_IRQ)
     if (!rIf) {
-        rIf = new SX1280Interface(SX128X_CS, SX128X_DIO1, SX128X_RESET, SX128X_BUSY, SPI);
+        rIf = new RF95Interface(RF95_NSS, RF95_IRQ, RF95_RESET, RF95_DIO1, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find SX1280 radio\n");
+            LOG_WARN("Failed to find RF95 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("SX1280 Radio init succeeded, using SX1280 radio\n");
+            LOG_INFO("RF95 Radio init succeeded, using RF95 radio\n");
         }
     }
 #endif
@@ -400,11 +426,11 @@ void setup()
     if (!rIf) {
         rIf = new SX1262Interface(SX126X_CS, SX126X_DIO1, SX126X_RESET, SX126X_BUSY, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find SX1262 radio\n");
+            LOG_WARN("Failed to find SX1262 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("SX1262 Radio init succeeded, using SX1262 radio\n");
+            LOG_INFO("SX1262 Radio init succeeded, using SX1262 radio\n");
         }
     }
 #endif
@@ -413,11 +439,11 @@ void setup()
     if (!rIf) {
         rIf = new SX1268Interface(SX126X_CS, SX126X_DIO1, SX126X_RESET, SX126X_BUSY, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find SX1268 radio\n");
+            LOG_WARN("Failed to find SX1268 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("SX1268 Radio init succeeded, using SX1268 radio\n");
+            LOG_INFO("SX1268 Radio init succeeded, using SX1268 radio\n");
         }
     }
 #endif
@@ -426,38 +452,39 @@ void setup()
     if (!rIf) {
         rIf = new LLCC68Interface(SX126X_CS, SX126X_DIO1, SX126X_RESET, SX126X_BUSY, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find LLCC68 radio\n");
+            LOG_WARN("Failed to find LLCC68 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("LLCC68 Radio init succeeded, using LLCC68 radio\n");
+            LOG_INFO("LLCC68 Radio init succeeded, using LLCC68 radio\n");
         }
     }
 #endif
 
-#ifdef ARCH_PORTDUINO
+#if defined(USE_SX1280)
     if (!rIf) {
-        rIf = new SimRadio;
+        rIf = new SX1280Interface(SX128X_CS, SX128X_DIO1, SX128X_RESET, SX128X_BUSY, SPI);
         if (!rIf->init()) {
-            DEBUG_MSG("Warning: Failed to find simulated radio\n");
+            LOG_WARN("Failed to find SX1280 radio\n");
             delete rIf;
             rIf = NULL;
         } else {
-            DEBUG_MSG("Using SIMULATED radio!\n");
+            LOG_INFO("SX1280 Radio init succeeded, using SX1280 radio\n");
         }
     }
 #endif
 
-// check if the radio chip matches the selected region
+    // check if the radio chip matches the selected region
 
-if((config.lora.region == Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLora())){
-    DEBUG_MSG("Warning: Radio chip does not support 2.4GHz LoRa. Reverting to unset.\n");
-    config.lora.region = Config_LoRaConfig_RegionCode_UNSET;
-    nodeDB.saveToDisk(SEGMENT_CONFIG);
-    if(!rIf->reconfigure()) {
-        DEBUG_MSG("Reconfigure failed, rebooting\n");
-        screen->startRebootScreen();
-        rebootAtMsec = millis() + 5000;
+    if ((config.lora.region == meshtastic_Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLora())) {
+        LOG_WARN("Radio chip does not support 2.4GHz LoRa. Reverting to unset.\n");
+        config.lora.region = meshtastic_Config_LoRaConfig_RegionCode_UNSET;
+        nodeDB.saveToDisk(SEGMENT_CONFIG);
+        if (!rIf->reconfigure()) {
+            LOG_WARN("Reconfigure failed, rebooting\n");
+            screen->startRebootScreen();
+            rebootAtMsec = millis() + 5000;
+        }
     }
 }
 
@@ -486,14 +513,16 @@ if((config.lora.region == Config_LoRaConfig_RegionCode_LORA_24) && (!rIf->wideLo
     airTime = new AirTime();
 
     if (!rIf)
-        RECORD_CRITICALERROR(CriticalErrorCode_NO_RADIO);
+        RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_NO_RADIO);
     else {
         router->addInterface(rIf);
 
         // Calculate and save the bit rate to myNodeInfo
         // TODO: This needs to be added what ever method changes the channel from the phone.
-        myNodeInfo.bitrate = (float(Constants_DATA_PAYLOAD_LEN) / (float(rIf->getPacketTime(Constants_DATA_PAYLOAD_LEN)))) * 1000;
-        DEBUG_MSG("myNodeInfo.bitrate = %f bytes / sec\n", myNodeInfo.bitrate);
+        myNodeInfo.bitrate =
+            (float(meshtastic_Constants_DATA_PAYLOAD_LEN) / (float(rIf->getPacketTime(meshtastic_Constants_DATA_PAYLOAD_LEN)))) *
+            1000;
+        LOG_DEBUG("myNodeInfo.bitrate = %f bytes / sec\n", myNodeInfo.bitrate);
     }
 
     // This must be _after_ service.init because we need our preferences loaded from flash to have proper timeout values
@@ -510,6 +539,21 @@ uint32_t shutdownAtMsec; // If not zero we will shutdown at this time (used to s
 // If a thread does something that might need for it to be rescheduled ASAP it can set this flag
 // This will supress the current delay and instead try to run ASAP.
 bool runASAP;
+
+extern meshtastic_DeviceMetadata getDeviceMetadata()
+{
+    meshtastic_DeviceMetadata deviceMetadata;
+    strncpy(deviceMetadata.firmware_version, myNodeInfo.firmware_version, 18);
+    deviceMetadata.device_state_version = DEVICESTATE_CUR_VER;
+    deviceMetadata.canShutdown = pmu_found || HAS_CPU_SHUTDOWN;
+    deviceMetadata.hasBluetooth = HAS_BLUETOOTH;
+    deviceMetadata.hasWifi = HAS_WIFI;
+    deviceMetadata.hasEthernet = HAS_ETHERNET;
+    deviceMetadata.role = config.device.role;
+    deviceMetadata.position_flags = config.position.position_flags;
+    deviceMetadata.hw_model = HW_VENDOR;
+    return deviceMetadata;
+}
 
 void loop()
 {
@@ -546,13 +590,13 @@ void loop()
     long delayMsec = mainController.runOrDelay();
 
     /* if (mainController.nextThread && delayMsec)
-        DEBUG_MSG("Next %s in %ld\n", mainController.nextThread->ThreadName.c_str(),
+        LOG_DEBUG("Next %s in %ld\n", mainController.nextThread->ThreadName.c_str(),
                   mainController.nextThread->tillRun(millis())); */
 
     // We want to sleep as long as possible here - because it saves power
     if (!runASAP && loopCanSleep()) {
-        // if(delayMsec > 100) DEBUG_MSG("sleeping %ld\n", delayMsec);
+        // if(delayMsec > 100) LOG_DEBUG("sleeping %ld\n", delayMsec);
         mainDelay.delay(delayMsec);
     }
-    // if (didWake) DEBUG_MSG("wake!\n");
+    // if (didWake) LOG_DEBUG("wake!\n");
 }
