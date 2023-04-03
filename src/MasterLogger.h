@@ -15,16 +15,19 @@
 class MasterLogger {
 public:
     struct LogData {
-        // Construct via GeoCoord(int32_t lat, int32_t lon, int32_t alt)
-        // Where lat, lon, and alt are from `extern meshtastic::GPSStatus *gpsStatus` global var.
+        // lat, lon, and alt are from `extern meshtastic::GPSStatus *gpsStatus` global var.
         // gpsStatus->getLatitude(), gpsStatus->getLongitude(), gpsStatus->GetAltitude()
-        GeoCoord gpsData;
+        struct GPS {
+            int32_t latitude;
+            int32_t longitude;
+            int32_t altitude;
+        } gpsData;
 
         // Retrieve via RTC.h -> getTime() or getValidTime(RTCQuality minQuality)
         time_t unixTimeStamp;
         enum DetectionType {
-            DETECTION_TYPE_HUMAN,
-            DETECTION_TYPE_VEHICLE
+            DETECTION_TYPE_SEISMIC,
+            DETECTION_TYPE_VOICE
         } detectionType;
     };
 
@@ -38,6 +41,8 @@ public:
      * Write LogData to the Masterfile as a string.
      */
     static void writeData(LogData& data);
+
+    static void writeActivity(LogData::DetectionType detectionType);
 
     static bool readLog(String& outLog);
 };

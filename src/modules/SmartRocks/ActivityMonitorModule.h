@@ -5,11 +5,11 @@
 
 #include "concurrency/NotifiedWorkerThread.h"
 #include "concurrency/Lock.h"
-
 #include "Sensor/GS1LFSensor.h"
 #include "Sensor/INMP441Sensor.h"
+#include "SinglePortModule.h"
 
-class ActivityMonitorModule : public concurrency::NotifiedWorkerThread {
+class ActivityMonitorModule : public SinglePortModule, public concurrency::NotifiedWorkerThread {
 public:
     ActivityMonitorModule();
     ~ActivityMonitorModule();
@@ -29,6 +29,8 @@ private:
 
     static void geophoneCollectThread(void* p);
     static void microphoneCollectThread(void* p);
+
+    void sendPayload(NodeNum dest, bool wantReplies);
 private:
     concurrency::Lock geophoneCollecting{};
     concurrency::Lock microphoneCollecting{};

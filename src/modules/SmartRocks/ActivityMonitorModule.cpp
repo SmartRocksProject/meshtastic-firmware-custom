@@ -6,6 +6,8 @@
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
 
+#include "MasterLogger.h"
+
 static void sensorInterrupt() {
     BaseType_t taskYieldRequired = pdFALSE;
 
@@ -28,7 +30,7 @@ static void activateMonitor(void* p) {
 }
 
 ActivityMonitorModule::ActivityMonitorModule()
-    : concurrency::NotifiedWorkerThread("ActivityMonitorModule")
+    : SinglePortModule("ActivityMonitorModule", PortNum_PRIVATE_APP), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
@@ -198,6 +200,10 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         DEBUG_MSG("\n(Seismic) Event detected!\n");
         DEBUG_MSG("    Fundamental frequency: %f\n", fundamentalFreq);
         DEBUG_MSG("    Max amplitude: %f\n\n", maxAmplitude);
+        
+    #ifdef ACTIVITY_LOG_TO_FILE
+        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
+    #endif
     } else {
         DEBUG_MSG("\n(Seismic) No event detected.\n\n");
     }
@@ -207,6 +213,10 @@ void ActivityMonitorModule::analyzeMicrophoneData() {
     vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
     if(vadState == VAD_SPEECH) {
         DEBUG_MSG("\n(Vocal) Event detected!\n\n");
+
+    #ifdef ACTIVITY_LOG_TO_FILE
+        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+    #endif
     } else {
         DEBUG_MSG("\n(Vocal) No event detected.\n\n");
     }
