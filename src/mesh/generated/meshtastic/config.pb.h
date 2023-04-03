@@ -31,10 +31,7 @@ typedef enum _meshtastic_Config_DeviceConfig_Role {
     meshtastic_Config_DeviceConfig_Role_REPEATER = 4,
     /* Tracker device role
    Position Mesh packets will be prioritized higher and sent more frequently by default. */
-    meshtastic_Config_DeviceConfig_Role_TRACKER = 5,
-    /* Sensor device role
-   Telemetry Mesh packets will be prioritized higher and sent more frequently by default. */
-    meshtastic_Config_DeviceConfig_Role_SENSOR = 6
+    meshtastic_Config_DeviceConfig_Role_TRACKER = 5
 } meshtastic_Config_DeviceConfig_Role;
 
 /* Defines the device's behavior for how messages are rebroadcast */
@@ -152,7 +149,7 @@ typedef enum _meshtastic_Config_LoRaConfig_RegionCode {
     meshtastic_Config_LoRaConfig_RegionCode_US = 1,
     /* European Union 433mhz */
     meshtastic_Config_LoRaConfig_RegionCode_EU_433 = 2,
-    /* European Union 868mhz */
+    /* European Union 433mhz */
     meshtastic_Config_LoRaConfig_RegionCode_EU_868 = 3,
     /* China */
     meshtastic_Config_LoRaConfig_RegionCode_CN = 4,
@@ -202,11 +199,11 @@ typedef enum _meshtastic_Config_LoRaConfig_ModemPreset {
 } meshtastic_Config_LoRaConfig_ModemPreset;
 
 typedef enum _meshtastic_Config_BluetoothConfig_PairingMode {
-    /* Device generates a random PIN that will be shown on the screen of the device for pairing */
+    /* Device generates a random pin that will be shown on the screen of the device for pairing */
     meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN = 0,
-    /* Device requires a specified fixed PIN for pairing */
+    /* Device requires a specified fixed pin for pairing */
     meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN = 1,
-    /* Device requires no PIN for pairing */
+    /* Device requires no pin for pairing */
     meshtastic_Config_BluetoothConfig_PairingMode_NO_PIN = 2
 } meshtastic_Config_BluetoothConfig_PairingMode;
 
@@ -228,9 +225,6 @@ typedef struct _meshtastic_Config_DeviceConfig {
     uint32_t buzzer_gpio;
     /* Sets the role of node */
     meshtastic_Config_DeviceConfig_RebroadcastMode rebroadcast_mode;
-    /* Send our nodeinfo this often
- Defaults to 900 Seconds (15 minutes) */
-    uint32_t node_info_broadcast_secs;
 } meshtastic_Config_DeviceConfig;
 
 /* Position Config */
@@ -364,7 +358,7 @@ typedef struct _meshtastic_Config_DisplayConfig {
 
 /* Lora Config */
 typedef struct _meshtastic_Config_LoRaConfig {
-    /* When enabled, the `modem_preset` fields will be adhered to, else the `bandwidth`/`spread_factor`/`coding_rate`
+    /* When enabled, the `modem_preset` fields will be adheared to, else the `bandwidth`/`spread_factor`/`coding_rate`
  will be taked from their respective manually defined fields */
     bool use_preset;
     /* Either modem_config or bandwidth/spreading/coding will be specified - NOT BOTH.
@@ -395,12 +389,12 @@ typedef struct _meshtastic_Config_LoRaConfig {
     /* Disable TX from the LoRa radio. Useful for hot-swapping antennas and other tests.
  Defaults to false */
     bool tx_enabled;
-    /* If zero, then use default max legal continuous power (ie. something that won't
+    /* If zero then, use default max legal continuous power (ie. something that won't
  burn out the radio hardware)
  In most cases you should use zero here.
  Units are in dBm. */
     int8_t tx_power;
-    /* This controls the actual hardware frequency the radio transmits on.
+    /* This is controlling the actual hardware frequency the radio is transmitting on.
  Most users should never need to be exposed to this field/concept.
  A channel number between 1 and NUM_CHANNELS (whatever the max is in the current region).
  If ZERO then the rule is "use the old channel name hash based
@@ -422,7 +416,7 @@ typedef struct _meshtastic_Config_LoRaConfig {
     float override_frequency;
     /* For testing it is useful sometimes to force a node to never listen to
  particular other nodes (simulating radio out of range). All nodenums listed
- in ignore_incoming will have packets they send dropped on receive (by router.cpp) */
+ in ignore_incoming will have packets they send droped on receive (by router.cpp) */
     pb_size_t ignore_incoming_count;
     uint32_t ignore_incoming[3];
 } meshtastic_Config_LoRaConfig;
@@ -432,7 +426,7 @@ typedef struct _meshtastic_Config_BluetoothConfig {
     bool enabled;
     /* Determines the pairing strategy for the device */
     meshtastic_Config_BluetoothConfig_PairingMode mode;
-    /* Specified PIN for PairingMode.FixedPin */
+    /* Specified pin for PairingMode.FixedPin */
     uint32_t fixed_pin;
 } meshtastic_Config_BluetoothConfig;
 
@@ -456,8 +450,8 @@ extern "C" {
 
 /* Helper constants for enums */
 #define _meshtastic_Config_DeviceConfig_Role_MIN meshtastic_Config_DeviceConfig_Role_CLIENT
-#define _meshtastic_Config_DeviceConfig_Role_MAX meshtastic_Config_DeviceConfig_Role_SENSOR
-#define _meshtastic_Config_DeviceConfig_Role_ARRAYSIZE ((meshtastic_Config_DeviceConfig_Role)(meshtastic_Config_DeviceConfig_Role_SENSOR+1))
+#define _meshtastic_Config_DeviceConfig_Role_MAX meshtastic_Config_DeviceConfig_Role_TRACKER
+#define _meshtastic_Config_DeviceConfig_Role_ARRAYSIZE ((meshtastic_Config_DeviceConfig_Role)(meshtastic_Config_DeviceConfig_Role_TRACKER+1))
 
 #define _meshtastic_Config_DeviceConfig_RebroadcastMode_MIN meshtastic_Config_DeviceConfig_RebroadcastMode_ALL
 #define _meshtastic_Config_DeviceConfig_RebroadcastMode_MAX meshtastic_Config_DeviceConfig_RebroadcastMode_LOCAL_ONLY
@@ -521,7 +515,7 @@ extern "C" {
 
 /* Initializer values for message structs */
 #define meshtastic_Config_init_default           {0, {meshtastic_Config_DeviceConfig_init_default}}
-#define meshtastic_Config_DeviceConfig_init_default {_meshtastic_Config_DeviceConfig_Role_MIN, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_RebroadcastMode_MIN, 0}
+#define meshtastic_Config_DeviceConfig_init_default {_meshtastic_Config_DeviceConfig_Role_MIN, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_RebroadcastMode_MIN}
 #define meshtastic_Config_PositionConfig_init_default {0, 0, 0, 0, 0, 0, 0, 0, 0}
 #define meshtastic_Config_PowerConfig_init_default {0, 0, 0, 0, 0, 0, 0, 0}
 #define meshtastic_Config_NetworkConfig_init_default {0, "", "", "", 0, _meshtastic_Config_NetworkConfig_AddressMode_MIN, false, meshtastic_Config_NetworkConfig_IpV4Config_init_default, ""}
@@ -530,7 +524,7 @@ extern "C" {
 #define meshtastic_Config_LoRaConfig_init_default {0, _meshtastic_Config_LoRaConfig_ModemPreset_MIN, 0, 0, 0, 0, _meshtastic_Config_LoRaConfig_RegionCode_MIN, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}}
 #define meshtastic_Config_BluetoothConfig_init_default {0, _meshtastic_Config_BluetoothConfig_PairingMode_MIN, 0}
 #define meshtastic_Config_init_zero              {0, {meshtastic_Config_DeviceConfig_init_zero}}
-#define meshtastic_Config_DeviceConfig_init_zero {_meshtastic_Config_DeviceConfig_Role_MIN, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_RebroadcastMode_MIN, 0}
+#define meshtastic_Config_DeviceConfig_init_zero {_meshtastic_Config_DeviceConfig_Role_MIN, 0, 0, 0, 0, _meshtastic_Config_DeviceConfig_RebroadcastMode_MIN}
 #define meshtastic_Config_PositionConfig_init_zero {0, 0, 0, 0, 0, 0, 0, 0, 0}
 #define meshtastic_Config_PowerConfig_init_zero  {0, 0, 0, 0, 0, 0, 0, 0}
 #define meshtastic_Config_NetworkConfig_init_zero {0, "", "", "", 0, _meshtastic_Config_NetworkConfig_AddressMode_MIN, false, meshtastic_Config_NetworkConfig_IpV4Config_init_zero, ""}
@@ -546,7 +540,6 @@ extern "C" {
 #define meshtastic_Config_DeviceConfig_button_gpio_tag 4
 #define meshtastic_Config_DeviceConfig_buzzer_gpio_tag 5
 #define meshtastic_Config_DeviceConfig_rebroadcast_mode_tag 6
-#define meshtastic_Config_DeviceConfig_node_info_broadcast_secs_tag 7
 #define meshtastic_Config_PositionConfig_position_broadcast_secs_tag 1
 #define meshtastic_Config_PositionConfig_position_broadcast_smart_enabled_tag 2
 #define meshtastic_Config_PositionConfig_fixed_position_tag 3
@@ -636,8 +629,7 @@ X(a, STATIC,   SINGULAR, BOOL,     serial_enabled,    2) \
 X(a, STATIC,   SINGULAR, BOOL,     debug_log_enabled,   3) \
 X(a, STATIC,   SINGULAR, UINT32,   button_gpio,       4) \
 X(a, STATIC,   SINGULAR, UINT32,   buzzer_gpio,       5) \
-X(a, STATIC,   SINGULAR, UENUM,    rebroadcast_mode,   6) \
-X(a, STATIC,   SINGULAR, UINT32,   node_info_broadcast_secs,   7)
+X(a, STATIC,   SINGULAR, UENUM,    rebroadcast_mode,   6)
 #define meshtastic_Config_DeviceConfig_CALLBACK NULL
 #define meshtastic_Config_DeviceConfig_DEFAULT NULL
 
@@ -749,7 +741,7 @@ extern const pb_msgdesc_t meshtastic_Config_BluetoothConfig_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define meshtastic_Config_BluetoothConfig_size   10
-#define meshtastic_Config_DeviceConfig_size      26
+#define meshtastic_Config_DeviceConfig_size      20
 #define meshtastic_Config_DisplayConfig_size     26
 #define meshtastic_Config_LoRaConfig_size        77
 #define meshtastic_Config_NetworkConfig_IpV4Config_size 20

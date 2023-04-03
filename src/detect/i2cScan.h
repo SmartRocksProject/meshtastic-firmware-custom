@@ -218,7 +218,6 @@ void scanI2Cdevice()
                 LOG_INFO("QMC5883L Highrate 3-Axis magnetic sensor found\n");
                 nodeTelemetrySensorsMap[meshtastic_TelemetrySensorType_QMC5883L] = addr;
             }
-            
             if (addr == PMSA0031_ADDR) {
                 LOG_INFO("PMSA0031 air quality sensor found\n");
                 nodeTelemetrySensorsMap[meshtastic_TelemetrySensorType_PMSA003I] = addr;

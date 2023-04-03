@@ -27,9 +27,6 @@
 #ifndef HAS_TELEMETRY
 #define HAS_TELEMETRY 1
 #endif
-#ifndef HAS_SENSOR
-#define HAS_SENSOR 1
-#endif
 #ifndef HAS_RADIO
 #define HAS_RADIO 1
 #endif
@@ -95,10 +92,6 @@
 #define HW_VENDOR meshtastic_HardwareModel_TLORA_T3_S3
 #elif defined(BETAFPV_2400_TX)
 #define HW_VENDOR meshtastic_HardwareModel_BETAFPV_2400_TX
-#elif defined(NANO_G1_EXPLORER)
-#define HW_VENDOR meshtastic_HardwareModel_NANO_G1_EXPLORER
-#elif defined(BETAFPV_900_TX_NANO)
-#define HW_VENDOR meshtastic_HardwareModel_BETAFPV_900_NANO_TX
 #endif
 
 //

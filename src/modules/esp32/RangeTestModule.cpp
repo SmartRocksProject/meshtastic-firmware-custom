@@ -56,7 +56,7 @@ int32_t RangeTestModule::runOnce()
                 return (5000); // Sending first message 5 seconds after initilization.
             } else {
                 LOG_INFO("Initializing Range Test Module -- Receiver\n");
-                return disable();
+                return (INT32_MAX);
                 // This thread does not need to run as a receiver
             }
 
@@ -91,9 +91,17 @@ int32_t RangeTestModule::runOnce()
     return disable();
 }
 
+meshtastic_MeshPacket *RangeTestModuleRadio::allocReply()
+{
+
+    auto reply = allocDataPacket(); // Allocate a packet for sending
+
+    return reply;
+}
+
 void RangeTestModuleRadio::sendPayload(NodeNum dest, bool wantReplies)
 {
-    meshtastic_MeshPacket *p = allocDataPacket();
+    meshtastic_MeshPacket *p = allocReply();
     p->to = dest;
     p->decoded.want_response = wantReplies;
 

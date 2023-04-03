@@ -181,7 +181,6 @@ void fsInit()
 #endif
 }
 
-
 void setupSDCard()
 {
 #ifdef HAS_SDCARD
@@ -212,6 +211,3 @@ void setupSDCard()
     LOG_DEBUG("Used space: %llu MB\n", SD.usedBytes() / (1024 * 1024));
 #endif
 }
-
-
-

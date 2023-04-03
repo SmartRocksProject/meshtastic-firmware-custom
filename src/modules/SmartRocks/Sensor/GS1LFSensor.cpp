@@ -2,8 +2,7 @@
 
 #include <Wire.h>
 
-#include "mesh/generated/meshtastic/telemetry.pb.h"
-#include "main.h"
+#include "main.h" 
 
 bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
     LOG_INFO("Init sensor: GS1LFSensor\n");

@@ -170,8 +170,6 @@ void NodeDB::installDefaultConfig()
     config.lora.hop_limit = HOP_RELIABLE;
     config.position.gps_enabled = true;
     config.position.position_broadcast_smart_enabled = true;
-    if (config.device.role != meshtastic_Config_DeviceConfig_Role_ROUTER)
-        config.device.node_info_broadcast_secs = 3 * 60 * 60;
     config.device.serial_enabled = true;
     resetRadioConfig();
     strncpy(config.network.ntp_server, "0.pool.ntp.org", 32);
@@ -235,13 +233,15 @@ void NodeDB::installRoleDefaults(meshtastic_Config_DeviceConfig_Role role)
         initModuleConfigIntervals();
     } else if (role == meshtastic_Config_DeviceConfig_Role_REPEATER) {
         config.display.screen_on_secs = 1;
+        meshtastic_Channel &ch = channels.getByIndex(channels.getPrimaryIndex());
+        meshtastic_ChannelSettings &channelSettings = ch.settings;
+        uint8_t defaultpskIndex = 1;
+        channelSettings.psk.bytes[0] = defaultpskIndex;
+        channelSettings.psk.size = 1;
     } else if (role == meshtastic_Config_DeviceConfig_Role_TRACKER) {
         config.position.position_broadcast_smart_enabled = false;
         config.position.position_broadcast_secs = 120;
         config.position.gps_update_interval = 60;
-    } else if (role == meshtastic_Config_DeviceConfig_Role_SENSOR) {
-        moduleConfig.telemetry.environment_measurement_enabled = true;
-        moduleConfig.telemetry.environment_update_interval = 300;
     }
 }
 
@@ -249,7 +249,6 @@ void NodeDB::initModuleConfigIntervals()
 {
     moduleConfig.telemetry.device_update_interval = default_broadcast_interval_secs;
     moduleConfig.telemetry.environment_update_interval = default_broadcast_interval_secs;
-    moduleConfig.telemetry.air_quality_interval = default_broadcast_interval_secs;
 }
 
 void NodeDB::installDefaultChannels()

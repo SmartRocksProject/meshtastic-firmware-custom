@@ -10,7 +10,7 @@
 #include "MeshTypes.h"
 #include "Observer.h"
 #include "PointerQueue.h"
-#if defined(ARCH_PORTDUINO) && !HAS_RADIO
+#ifdef ARCH_PORTDUINO
 #include "../platform/portduino/SimRadio.h"
 #endif
 

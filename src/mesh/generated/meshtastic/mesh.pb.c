@@ -48,9 +48,6 @@ PB_BIND(meshtastic_ToRadio, meshtastic_ToRadio, 2)
 PB_BIND(meshtastic_Compressed, meshtastic_Compressed, AUTO)
 
 
-PB_BIND(meshtastic_DeviceMetadata, meshtastic_DeviceMetadata, AUTO)
-
-
 
 
 
