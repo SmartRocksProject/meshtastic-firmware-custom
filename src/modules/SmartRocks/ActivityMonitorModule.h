@@ -7,9 +7,11 @@
 #include "concurrency/Lock.h"
 #include "Sensor/GS1LFSensor.h"
 #include "Sensor/INMP441Sensor.h"
-#include "SinglePortModule.h"
+#include "ProtobufModule.h"
+#include "mesh/generated/meshtastic/activitymonitor.pb.h"
+#include "MasterLogger.h"
 
-class ActivityMonitorModule : public SinglePortModule, public concurrency::NotifiedWorkerThread {
+class ActivityMonitorModule : public ProtobufModule<meshtastic_ActivityMonitorModuleConfig>, public concurrency::NotifiedWorkerThread {
 public:
     ActivityMonitorModule();
     ~ActivityMonitorModule();
@@ -17,6 +19,16 @@ public:
     virtual void onNotify(uint32_t notification) override;
 
     TaskHandle_t runningTaskHandle{};
+protected:
+    /** Called to handle a particular incoming message
+
+    @return true if you've guaranteed you've handled this message and no other handlers should be considered for it
+    */
+    virtual bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_ActivityMonitorModuleConfig *pptr) override;
+
+    /** Messages can be received that have the want_response bit set.  If set, this callback will be invoked
+     * so that subclasses can (optionally) send a response back to the original sender.  */
+    virtual meshtastic_MeshPacket* allocReply() override;
 private:
     void collectData();
     void analyzeData();
@@ -30,7 +42,7 @@ private:
     static void geophoneCollectThread(void* p);
     static void microphoneCollectThread(void* p);
 
-    void sendPayload(NodeNum dest, bool wantReplies);
+    void sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest = NODENUM_BROADCAST, bool wantReplies = false);
 private:
     concurrency::Lock geophoneCollecting{};
     concurrency::Lock microphoneCollecting{};

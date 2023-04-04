@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "GeoCoord.h"
 
 #include <WString.h>
@@ -39,7 +38,7 @@ public:
      */
     static void writeData(LogData& data);
 
-    static void writeActivity(LogData::DetectionType detectionType);
+    static LogData getLogData(LogData::DetectionType detectionType);
 
     static bool readLog(String& outLog);
 

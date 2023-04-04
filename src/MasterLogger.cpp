@@ -81,7 +81,7 @@ void MasterLogger::writeData(LogData& data) {
     }
 }
 
-void MasterLogger::writeActivity(LogData::DetectionType detectionType) {
+MasterLogger::LogData MasterLogger::getLogData(LogData::DetectionType detectionType) {
     MasterLogger::LogData data;
     data.gpsData = {
         gpsStatus->getLatitude(),
@@ -90,7 +90,7 @@ void MasterLogger::writeActivity(LogData::DetectionType detectionType) {
     };
     data.unixTimeStamp = getTime();
     data.detectionType = detectionType;
-    writeData(data);
+    return data;
 }
 
 bool MasterLogger::readLog(String& outLog) {

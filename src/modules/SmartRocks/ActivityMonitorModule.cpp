@@ -7,6 +7,11 @@
 #include <freertos/task.h>
 
 #include "MasterLogger.h"
+#include "MeshService.h"
+#include "GPSStatus.h"
+#include "RTC.h"
+
+extern meshtastic::GPSStatus *gpsStatus;
 
 static void sensorInterrupt() {
     BaseType_t taskYieldRequired = pdFALSE;
@@ -30,7 +35,7 @@ static void activateMonitor(void* p) {
 }
 
 ActivityMonitorModule::ActivityMonitorModule()
-    : SinglePortModule("ActivityMonitorModule", meshtastic_PortNum_ACTIVITY_MONITOR_APP), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
+    : ProtobufModule("ActivityMonitorModule", meshtastic_PortNum_ACTIVITY_MONITOR_APP, &meshtastic_ActivityMonitorModuleConfig_msg), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
@@ -40,8 +45,6 @@ ActivityMonitorModule::ActivityMonitorModule()
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
     }
     if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, microphoneSensorData.vadBufferLength)) {
-        //microphoneSensorData.outputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.numSamples);
-        //microphoneSensorData.inputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.VadBufferLength);
         microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
         microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
 
@@ -202,7 +205,9 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         LOG_INFO("    Max amplitude: %f\n\n", maxAmplitude);
         
     #ifdef ACTIVITY_LOG_TO_FILE
-        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
+        MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
+        MasterLogger::writeData(data);
+        sendActivityMonitorData(data);
     #endif
     } else {
         LOG_INFO("\n(Seismic) No event detected.\n\n");
@@ -213,11 +218,65 @@ void ActivityMonitorModule::analyzeMicrophoneData() {
     vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
     if(vadState == VAD_SPEECH) {
         LOG_INFO("\n(Vocal) Event detected!\n\n");
-
     #ifdef ACTIVITY_LOG_TO_FILE
-        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+        MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+        MasterLogger::writeData(data);
+        sendActivityMonitorData(data);
     #endif
     } else {
         LOG_INFO("\n(Vocal) No event detected.\n\n");
     }
+}
+
+void ActivityMonitorModule::sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest, bool wantReplies) {
+    meshtastic_ActivityMonitorModuleConfig am;
+    am.has_gpsData = true;
+    am.gpsData = {
+        .latitude = data.gpsData.latitude,
+        .longitude = data.gpsData.longitude,
+        .altitude = data.gpsData.altitude,
+    };
+    am.unixTimeStamp = data.unixTimeStamp;
+    am.detectionType = data.detectionType == MasterLogger::LogData::DETECTION_TYPE_SEISMIC
+        ? meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
+        : meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_VOICE;
+    
+    meshtastic_MeshPacket* p = allocDataProtobuf(am);
+    p->to = dest;
+    p->decoded.want_response = wantReplies;
+    p->priority = meshtastic_MeshPacket_Priority_MAX;
+
+    service.sendToMesh(p);
+}
+
+bool ActivityMonitorModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_ActivityMonitorModuleConfig *pptr) {
+#ifdef ACTIVITY_LOG_TO_FILE
+    auto p = *pptr;
+
+    MasterLogger::LogData data;
+    data.gpsData.latitude = p.gpsData.latitude;
+    data.gpsData.longitude = p.gpsData.longitude;
+    data.gpsData.altitude = p.gpsData.altitude;
+    data.unixTimeStamp = p.unixTimeStamp;
+    data.detectionType = p.detectionType == meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
+        ? MasterLogger::LogData::DETECTION_TYPE_SEISMIC
+        : MasterLogger::LogData::DETECTION_TYPE_VOICE;
+    
+    MasterLogger::writeData(data);
+#endif
+    if(mp.decoded.want_response) {
+        // Send a reply
+        meshtastic_MeshPacket* reply = allocReply();
+        reply->to = mp.from;
+        reply->decoded.want_response = false;
+        reply->priority = meshtastic_MeshPacket_Priority_MAX;
+        service.sendToMesh(reply);
+    }
+
+    return false; // Let others look at this message also if they want
+}
+
+meshtastic_MeshPacket* ActivityMonitorModule::allocReply() {
+    auto reply = allocDataPacket();
+    return reply;
 }

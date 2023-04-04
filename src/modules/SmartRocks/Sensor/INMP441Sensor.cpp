@@ -20,7 +20,9 @@ bool INMP441Sensor::setup(uint32_t sampleRate, int bufferLen) {
         .use_apll = false
     };
 
-    i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL);
+    if(i2s_driver_install(I2S_PORT, &i2s_config, 0, NULL) != ESP_OK) {
+        return false;
+    }
 
     const i2s_pin_config_t pin_config = {
         .bck_io_num = I2S_SCK,
@@ -29,9 +31,13 @@ bool INMP441Sensor::setup(uint32_t sampleRate, int bufferLen) {
         .data_in_num = I2S_SD
     };
 
-    i2s_set_pin(I2S_PORT, &pin_config);
+    if(i2s_set_pin(I2S_PORT, &pin_config) != ESP_OK) {
+        return false;
+    }
 
-    i2s_start(I2S_PORT);
+    if(i2s_start(I2S_PORT) != ESP_OK) {
+        return false;
+    }
 
     return true;
 }
