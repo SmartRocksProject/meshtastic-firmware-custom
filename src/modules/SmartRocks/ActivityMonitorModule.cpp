@@ -30,7 +30,7 @@ static void activateMonitor(void* p) {
 }
 
 ActivityMonitorModule::ActivityMonitorModule()
-    : SinglePortModule("ActivityMonitorModule", meshtastic_PortNum_PRIVATE_APP), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
+    : SinglePortModule("ActivityMonitorModule", meshtastic_PortNum_ACTIVITY_MONITOR_APP), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
