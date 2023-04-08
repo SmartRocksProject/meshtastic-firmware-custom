@@ -113,7 +113,7 @@ void XModemAdapter::handlePacket(meshtastic_XModem xmodemPacket)
                     packetReady.notifyObservers(packetno);
                     break;
                 }
-                sendControl(meshtastic_XModem_Control_NAK);
+                sendControl(meshtastic_XModem_Control_CAN);
                 isTransmitting = false;
                 break;
             }
