@@ -12,8 +12,8 @@ class EnvironmentTelemetryModule : private concurrency::OSThread, public Protobu
         : concurrency::OSThread("EnvironmentTelemetryModule"),
           ProtobufModule("EnvironmentTelemetry", meshtastic_PortNum_TELEMETRY_APP, &meshtastic_Telemetry_msg)
     {
-        lastMeasurementPacket = nullptr;
-        setIntervalFromNow(10 * 1000);
+      lastMeasurementPacket = nullptr;
+      setIntervalFromNow(10 * 1000);
     }
     virtual bool wantUIFrame() override;
 #if !HAS_SCREEN
@@ -36,7 +36,7 @@ class EnvironmentTelemetryModule : private concurrency::OSThread, public Protobu
   private:
     float CelsiusToFahrenheit(float c);
     bool firstTime = 1;
-    meshtastic_MeshPacket *lastMeasurementPacket;
+    const meshtastic_MeshPacket *lastMeasurementPacket;
     uint32_t sendToPhoneIntervalMs = SECONDS_IN_MINUTE * 1000; // Send to phone every minute
     uint32_t lastSentToMesh = 0;
     uint32_t sensor_read_error_count = 0;

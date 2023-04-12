@@ -55,9 +55,6 @@ class Router : protected concurrency::OSThread
      */
     meshtastic_MeshPacket *allocForSending();
 
-    /** Return Underlying interface's TX queue status */
-    meshtastic_QueueStatus getQueueStatus();
-
     /**
      * @return our local nodenum */
     NodeNum getNodeNum();
@@ -73,6 +70,9 @@ class Router : protected concurrency::OSThread
      */
     void enqueueReceivedMessage(meshtastic_MeshPacket *p);
 
+  protected:
+    friend class RoutingModule;
+
     /**
      * Send a packet on a suitable interface.  This routine will
      * later free() the packet to pool.  This routine is not allowed to stall.
@@ -81,9 +81,6 @@ class Router : protected concurrency::OSThread
      * NOTE: This method will free the provided packet (even if we return an error code)
      */
     virtual ErrorCode send(meshtastic_MeshPacket *p);
-
-  protected:
-    friend class RoutingModule;
 
     /**
      * Should this incoming filter be dropped?

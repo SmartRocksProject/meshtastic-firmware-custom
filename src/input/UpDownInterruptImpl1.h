@@ -1,7 +1,8 @@
 #pragma once
 #include "UpDownInterruptBase.h"
 
-class UpDownInterruptImpl1 : public UpDownInterruptBase
+class UpDownInterruptImpl1 :
+    public UpDownInterruptBase
 {
   public:
     UpDownInterruptImpl1();

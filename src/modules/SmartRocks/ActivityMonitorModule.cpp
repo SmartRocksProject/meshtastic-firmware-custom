@@ -119,14 +119,14 @@ void ActivityMonitorModule::microphoneCollectThread(void* p) {
 }
 
 void ActivityMonitorModule::collectGeophoneData() {
-    LOG_INFO("Collecting geophone data...\n");
+    DEBUG_MSG("Collecting geophone data...\n");
     geophoneSensorData.gs1lfSensor.setContinuousMode(true);
     delay(1);
     for(int i = 0; i < geophoneSensorData.numSamples; i++) {
         unsigned long microseconds = micros();
         float voltage = 0.0f;
         if(!geophoneSensorData.gs1lfSensor.readVoltage(voltage)) {
-            LOG_INFO("Error when reading GS1LFSensor voltage!\n");
+            DEBUG_MSG("Error when reading GS1LFSensor voltage!\n");
             return;
         }
 
@@ -135,26 +135,26 @@ void ActivityMonitorModule::collectGeophoneData() {
         // Sleep for any remaining time between samples.
         long long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (long long) (micros() - microseconds);
         if(remainingTime < 0) {
-            LOG_INFO("(GS1LF) Sampling frequency too high!\n");
+            DEBUG_MSG("(GS1LF) Sampling frequency too high!\n");
         } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
     }
     geophoneSensorData.gs1lfSensor.setContinuousMode(false);
-    LOG_INFO("Finished collecting geophone data.\n");
+    DEBUG_MSG("Finished collecting geophone data.\n");
     geophoneSensorData.successfulRead = true;
 }
 
 void ActivityMonitorModule::collectMicrophoneData() {
     // Collect microphone data.
-    LOG_INFO("Collecting microphone data...\n");
+    DEBUG_MSG("Collecting microphone data...\n");
 
     if(microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer) != microphoneSensorData.vadBufferLength) {
-        LOG_INFO("Error when reading microphone data!\n");
+        DEBUG_MSG("Error when reading microphone data!\n");
         return;
     }
 
-    LOG_INFO("Finished collecting microphone data.\n");
+    DEBUG_MSG("Finished collecting microphone data.\n");
     microphoneSensorData.successfulRead = true;
 }
 
@@ -200,9 +200,9 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         fundamentalFreq < geophoneSensorData.frequencyRangeThreshold.high &&
         maxAmplitude > geophoneSensorData.amplitudeThreshold
     ) {
-        LOG_INFO("\n(Seismic) Event detected!\n");
-        LOG_INFO("    Fundamental frequency: %f\n", fundamentalFreq);
-        LOG_INFO("    Max amplitude: %f\n\n", maxAmplitude);
+        DEBUG_MSG("\n(Seismic) Event detected!\n");
+        DEBUG_MSG("    Fundamental frequency: %f\n", fundamentalFreq);
+        DEBUG_MSG("    Max amplitude: %f\n\n", maxAmplitude);
         
     #ifdef ACTIVITY_LOG_TO_FILE
         MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
@@ -210,21 +210,21 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         sendActivityMonitorData(data);
     #endif
     } else {
-        LOG_INFO("\n(Seismic) No event detected.\n\n");
+        DEBUG_MSG("\n(Seismic) No event detected.\n\n");
     }
 }
 
 void ActivityMonitorModule::analyzeMicrophoneData() {
     vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
     if(vadState == VAD_SPEECH) {
-        LOG_INFO("\n(Vocal) Event detected!\n\n");
+        DEBUG_MSG("\n(Vocal) Event detected!\n\n");
     #ifdef ACTIVITY_LOG_TO_FILE
         MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
         MasterLogger::writeData(data);
         sendActivityMonitorData(data);
     #endif
     } else {
-        LOG_INFO("\n(Vocal) No event detected.\n\n");
+        DEBUG_MSG("\n(Vocal) No event detected.\n\n");
     }
 }
 

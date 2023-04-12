@@ -2,8 +2,8 @@
 #if HAS_SCREEN
 #include "CannedMessageModule.h"
 #include "FSCommon.h"
-#include "MeshService.h"
 #include "NodeDB.h"
+#include "MeshService.h"
 #include "PowerFSM.h" // neede for button bypass
 #include "mesh/generated/meshtastic/cannedmessages.pb.h"
 
@@ -43,22 +43,22 @@ meshtastic_CannedMessageModuleConfig cannedMessageModuleConfig;
 
 CannedMessageModule *cannedMessageModule;
 
+// TODO: move it into NodeDB.h!
+extern bool loadProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields, void *dest_struct);
+extern bool saveProto(const char *filename, size_t protoSize, const pb_msgdesc_t *fields, const void *dest_struct);
+
 CannedMessageModule::CannedMessageModule()
     : SinglePortModule("canned", meshtastic_PortNum_TEXT_MESSAGE_APP), concurrency::OSThread("CannedMessageModule")
 {
     if (moduleConfig.canned_message.enabled) {
         this->loadProtoForModule();
         if ((this->splitConfiguredMessages() <= 0) && (cardkb_found != CARDKB_ADDR)) {
-            LOG_INFO("CannedMessageModule: No messages are configured. Module is disabled\n");
+            DEBUG_MSG("CannedMessageModule: No messages are configured. Module is disabled\n");
             this->runState = CANNED_MESSAGE_RUN_STATE_DISABLED;
-            disable();
         } else {
-            LOG_INFO("CannedMessageModule is enabled\n");
+            DEBUG_MSG("CannedMessageModule is enabled\n");
             this->inputObserver.observe(inputBroker);
         }
-    } else {
-        this->runState = CANNED_MESSAGE_RUN_STATE_DISABLED;
-        disable();
     }
 }
 
@@ -75,7 +75,7 @@ int CannedMessageModule::splitConfiguredMessages()
     int i = 0;
 
     // collect all the message parts
-    strncpy(this->messageStore, cannedMessageModuleConfig.messages, sizeof(this->messageStore));
+    strcpy(this->messageStore, cannedMessageModuleConfig.messages);
 
     // The first message points to the beginning of the store.
     this->messages[messageIndex++] = this->messageStore;
@@ -85,7 +85,7 @@ int CannedMessageModule::splitConfiguredMessages()
         if (this->messageStore[i] == '|') {
             // Message ending found, replace it with string-end character.
             this->messageStore[i] = '\0';
-            LOG_DEBUG("CannedMessage %d is: '%s'\n", messageIndex - 1, this->messages[messageIndex - 1]);
+            DEBUG_MSG("CannedMessage %d is: '%s'\n", messageIndex - 1, this->messages[messageIndex - 1]);
 
             // hit our max messages, bail
             if (messageIndex >= CANNED_MESSAGE_MODULE_MESSAGE_MAX_COUNT) {
@@ -100,7 +100,7 @@ int CannedMessageModule::splitConfiguredMessages()
     }
     if (strlen(this->messages[messageIndex - 1]) > 0) {
         // We have a last message.
-        LOG_DEBUG("CannedMessage %d is: '%s'\n", messageIndex - 1, this->messages[messageIndex - 1]);
+        DEBUG_MSG("CannedMessage %d is: '%s'\n", messageIndex - 1, this->messages[messageIndex - 1]);
         this->messagesCount = messageIndex;
     } else {
         this->messagesCount = messageIndex - 1;
@@ -123,17 +123,17 @@ int CannedMessageModule::handleInputEvent(const InputEvent *event)
 
     bool validEvent = false;
     if (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_UP)) {
-        LOG_DEBUG("Canned message event UP\n");
+        DEBUG_MSG("Canned message event UP\n");
         this->runState = CANNED_MESSAGE_RUN_STATE_ACTION_UP;
         validEvent = true;
     }
     if (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_DOWN)) {
-        LOG_DEBUG("Canned message event DOWN\n");
+        DEBUG_MSG("Canned message event DOWN\n");
         this->runState = CANNED_MESSAGE_RUN_STATE_ACTION_DOWN;
         validEvent = true;
     }
     if (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_SELECT)) {
-        LOG_DEBUG("Canned message event Select\n");
+        DEBUG_MSG("Canned message event Select\n");
         // when inactive, call the onebutton shortpress instead. Activate Module only on up/down
         if ((this->runState == CANNED_MESSAGE_RUN_STATE_INACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_DISABLED)) {
             powerFSM.trigger(EVENT_PRESS);
@@ -144,15 +144,15 @@ int CannedMessageModule::handleInputEvent(const InputEvent *event)
         }
     }
     if (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_CANCEL)) {
-        LOG_DEBUG("Canned message event Cancel\n");
+        DEBUG_MSG("Canned message event Cancel\n");
         // emulate a timeout. Same result
         this->lastTouchMillis = 0;
         validEvent = true;
     }
-    if ((event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_BACK)) ||
+    if ((event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_BACK)) || 
         (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_LEFT)) ||
         (event->inputEvent == static_cast<char>(meshtastic_ModuleConfig_CannedMessageConfig_InputEventChar_RIGHT))) {
-        LOG_DEBUG("Canned message event (%x)\n", event->kbchar);
+        DEBUG_MSG("Canned message event (%x)\n",event->kbchar);
         if (this->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT) {
             // pass the pressed key
             this->payload = event->kbchar;
@@ -161,10 +161,9 @@ int CannedMessageModule::handleInputEvent(const InputEvent *event)
         }
     }
     if (event->inputEvent == static_cast<char>(ANYKEY)) {
-        LOG_DEBUG("Canned message event any key pressed\n");
+        DEBUG_MSG("Canned message event any key pressed\n");
         // when inactive, this will switch to the freetext mode
-        if ((this->runState == CANNED_MESSAGE_RUN_STATE_INACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_ACTIVE) ||
-            (this->runState == CANNED_MESSAGE_RUN_STATE_DISABLED)) {
+        if ((this->runState == CANNED_MESSAGE_RUN_STATE_INACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_ACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_DISABLED)) {
             this->runState = CANNED_MESSAGE_RUN_STATE_FREETEXT;
         }
         // pass the pressed key
@@ -173,11 +172,11 @@ int CannedMessageModule::handleInputEvent(const InputEvent *event)
         validEvent = true;
     }
     if (event->inputEvent == static_cast<char>(MATRIXKEY)) {
-        LOG_DEBUG("Canned message event Matrix key pressed\n");
+        DEBUG_MSG("Canned message event Matrix key pressed\n");
         // this will send the text immediately on matrix press
         this->runState = CANNED_MESSAGE_RUN_STATE_ACTION_SELECT;
         this->payload = MATRIXKEY;
-        this->currentMessageIndex = event->kbchar - 1;
+        this->currentMessageIndex = event->kbchar -1;
         this->lastTouchMillis = millis();
         validEvent = true;
     }
@@ -203,7 +202,7 @@ void CannedMessageModule::sendText(NodeNum dest, const char *message, bool wantR
         p->decoded.payload.size++;
     }
 
-    LOG_INFO("Sending message id=%d, dest=%x, msg=%.*s\n", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
+    DEBUG_MSG("Sending message id=%d, dest=%x, msg=%.*s\n", p->id, p->to, p->decoded.payload.size, p->decoded.payload.bytes);
 
     service.sendToMesh(p);
 }
@@ -214,7 +213,7 @@ int32_t CannedMessageModule::runOnce()
         (this->runState == CANNED_MESSAGE_RUN_STATE_INACTIVE)) {
         return INT32_MAX;
     }
-    LOG_DEBUG("Check status\n");
+    DEBUG_MSG("Check status\n");
     UIFrameEvent e = {false, true};
     if (this->runState == CANNED_MESSAGE_RUN_STATE_SENDING_ACTIVE) {
         // TODO: might have some feedback of sendig state
@@ -225,10 +224,9 @@ int32_t CannedMessageModule::runOnce()
         this->cursor = 0;
         this->destSelect = false;
         this->notifyObservers(&e);
-    } else if (((this->runState == CANNED_MESSAGE_RUN_STATE_ACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT)) &&
-               ((millis() - this->lastTouchMillis) > INACTIVATE_AFTER_MS)) {
+    } else if (((this->runState == CANNED_MESSAGE_RUN_STATE_ACTIVE) || (this->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT)) && ((millis() - this->lastTouchMillis) > INACTIVATE_AFTER_MS)) {
         // Reset module
-        LOG_DEBUG("Reset due to lack of activity.\n");
+        DEBUG_MSG("Reset due to lack of activity.\n");
         e.frameChanged = true;
         this->currentMessageIndex = -1;
         this->freetext = ""; // clear freetext
@@ -242,12 +240,12 @@ int32_t CannedMessageModule::runOnce()
                 sendText(this->dest, this->freetext.c_str(), true);
                 this->runState = CANNED_MESSAGE_RUN_STATE_SENDING_ACTIVE;
             } else {
-                LOG_DEBUG("Reset message is empty.\n");
+                DEBUG_MSG("Reset message is empty.\n");
                 this->runState = CANNED_MESSAGE_RUN_STATE_INACTIVE;
             }
         } else {
             if ((this->messagesCount > this->currentMessageIndex) && (strlen(this->messages[this->currentMessageIndex]) > 0)) {
-                if (strcmp(this->messages[this->currentMessageIndex], "~") == 0) {
+                if(strcmp (this->messages[this->currentMessageIndex], "~") == 0) {
                     powerFSM.trigger(EVENT_PRESS);
                     return INT32_MAX;
                 } else {
@@ -255,7 +253,7 @@ int32_t CannedMessageModule::runOnce()
                 }
                 this->runState = CANNED_MESSAGE_RUN_STATE_SENDING_ACTIVE;
             } else {
-                LOG_DEBUG("Reset message is empty.\n");
+                DEBUG_MSG("Reset message is empty.\n");
                 this->runState = CANNED_MESSAGE_RUN_STATE_INACTIVE;
             }
         }
@@ -266,9 +264,9 @@ int32_t CannedMessageModule::runOnce()
         this->destSelect = false;
         this->notifyObservers(&e);
         return 2000;
-    } else if ((this->runState != CANNED_MESSAGE_RUN_STATE_FREETEXT) && (this->currentMessageIndex == -1)) {
+     } else if ((this->runState != CANNED_MESSAGE_RUN_STATE_FREETEXT) && (this->currentMessageIndex == -1)) {
         this->currentMessageIndex = 0;
-        LOG_DEBUG("First touch (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
+        DEBUG_MSG("First touch (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
         e.frameChanged = true;
         this->runState = CANNED_MESSAGE_RUN_STATE_ACTIVE;
     } else if (this->runState == CANNED_MESSAGE_RUN_STATE_ACTION_UP) {
@@ -278,7 +276,7 @@ int32_t CannedMessageModule::runOnce()
             this->cursor = 0;
             this->destSelect = false;
             this->runState = CANNED_MESSAGE_RUN_STATE_ACTIVE;
-            LOG_DEBUG("MOVE UP (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
+            DEBUG_MSG("MOVE UP (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
         }
     } else if (this->runState == CANNED_MESSAGE_RUN_STATE_ACTION_DOWN) {
         if (this->messagesCount > 0) {
@@ -287,86 +285,86 @@ int32_t CannedMessageModule::runOnce()
             this->cursor = 0;
             this->destSelect = false;
             this->runState = CANNED_MESSAGE_RUN_STATE_ACTIVE;
-            LOG_DEBUG("MOVE DOWN (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
+            DEBUG_MSG("MOVE DOWN (%d):%s\n", this->currentMessageIndex, this->getCurrentMessage());
         }
     } else if (this->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT) {
         e.frameChanged = true;
         switch (this->payload) {
-        case 0xb4: // left
-            if (this->destSelect) {
-                size_t numNodes = nodeDB.getNumNodes();
-                if (this->dest == NODENUM_BROADCAST) {
-                    this->dest = nodeDB.getNodeNum();
-                }
-                for (unsigned int i = 0; i < numNodes; i++) {
-                    if (nodeDB.getNodeByIndex(i)->num == this->dest) {
-                        this->dest = (i > 0) ? nodeDB.getNodeByIndex(i - 1)->num : nodeDB.getNodeByIndex(numNodes - 1)->num;
-                        break;
+            case 0xb4: // left
+                if (this->destSelect){
+                    size_t numNodes = nodeDB.getNumNodes();
+                    if(this->dest == NODENUM_BROADCAST) {
+                        this->dest = nodeDB.getNodeNum();
+                    }
+                    for (unsigned int i = 0; i < numNodes; i++) {
+                        if (nodeDB.getNodeByIndex(i)->num == this->dest) {
+                            this->dest = (i > 0) ? nodeDB.getNodeByIndex(i-1)->num : nodeDB.getNodeByIndex(numNodes-1)->num;
+                            break;
+                        }
+                    }
+                    if(this->dest == nodeDB.getNodeNum()) {
+                        this->dest = NODENUM_BROADCAST;
+                    }
+                }else{
+                    if (this->cursor > 0) {
+                        this->cursor--;
                     }
                 }
-                if (this->dest == nodeDB.getNodeNum()) {
-                    this->dest = NODENUM_BROADCAST;
+                break;
+            case 0xb7: // right
+                if (this->destSelect){
+                    size_t numNodes = nodeDB.getNumNodes();
+                    if(this->dest == NODENUM_BROADCAST) {
+                        this->dest = nodeDB.getNodeNum();
+                    }
+                    for (unsigned int i = 0; i < numNodes; i++) {
+                        if (nodeDB.getNodeByIndex(i)->num == this->dest) {
+                            this->dest = (i < numNodes-1) ? nodeDB.getNodeByIndex(i+1)->num : nodeDB.getNodeByIndex(0)->num;
+                            break;
+                        }
+                    }
+                    if(this->dest == nodeDB.getNodeNum()) {
+                        this->dest = NODENUM_BROADCAST;
+                    }
+                }else{
+                    if (this->cursor < this->freetext.length()) {
+                        this->cursor++;
+                    }
                 }
-            } else {
-                if (this->cursor > 0) {
+                break;
+            case 0x08: // backspace
+                if (this->freetext.length() > 0) {
+                    if(this->cursor == this->freetext.length()) {
+                        this->freetext = this->freetext.substring(0, this->freetext.length() - 1);
+                    } else {
+                        this->freetext = this->freetext.substring(0, this->cursor - 1) + this->freetext.substring(this->cursor, this->freetext.length());
+                    }
                     this->cursor--;
                 }
-            }
-            break;
-        case 0xb7: // right
-            if (this->destSelect) {
-                size_t numNodes = nodeDB.getNumNodes();
-                if (this->dest == NODENUM_BROADCAST) {
-                    this->dest = nodeDB.getNodeNum();
-                }
-                for (unsigned int i = 0; i < numNodes; i++) {
-                    if (nodeDB.getNodeByIndex(i)->num == this->dest) {
-                        this->dest = (i < numNodes - 1) ? nodeDB.getNodeByIndex(i + 1)->num : nodeDB.getNodeByIndex(0)->num;
-                        break;
-                    }
-                }
-                if (this->dest == nodeDB.getNodeNum()) {
-                    this->dest = NODENUM_BROADCAST;
-                }
-            } else {
-                if (this->cursor < this->freetext.length()) {
-                    this->cursor++;
-                }
-            }
-            break;
-        case 0x08: // backspace
-            if (this->freetext.length() > 0) {
-                if (this->cursor == this->freetext.length()) {
-                    this->freetext = this->freetext.substring(0, this->freetext.length() - 1);
+                break;
+            case 0x09: // tab
+                if(this->destSelect) {
+                    this->destSelect = false;
                 } else {
-                    this->freetext = this->freetext.substring(0, this->cursor - 1) +
-                                     this->freetext.substring(this->cursor, this->freetext.length());
+                    this->destSelect = true;
                 }
-                this->cursor--;
-            }
-            break;
-        case 0x09: // tab
-            if (this->destSelect) {
-                this->destSelect = false;
-            } else {
-                this->destSelect = true;
-            }
-            break;
-        default:
-            if (this->cursor == this->freetext.length()) {
-                this->freetext += this->payload;
-            } else {
-                this->freetext =
-                    this->freetext.substring(0, this->cursor) + this->payload + this->freetext.substring(this->cursor);
-            }
-            this->cursor += 1;
-            if (this->freetext.length() > meshtastic_Constants_DATA_PAYLOAD_LEN) {
-                this->cursor = meshtastic_Constants_DATA_PAYLOAD_LEN;
-                this->freetext = this->freetext.substring(0, meshtastic_Constants_DATA_PAYLOAD_LEN);
-            }
-            break;
+                break;
+            default:
+                if(this->cursor == this->freetext.length()) {
+                    this->freetext += this->payload;
+                } else {
+                    this->freetext = this->freetext.substring(0, this->cursor)
+                    + this->payload
+                    + this->freetext.substring(this->cursor);
+                }
+                this->cursor += 1;
+                if (this->freetext.length() > meshtastic_Constants_DATA_PAYLOAD_LEN) {
+                    this->cursor = meshtastic_Constants_DATA_PAYLOAD_LEN;
+                    this->freetext = this->freetext.substring(0, meshtastic_Constants_DATA_PAYLOAD_LEN);
+                }
+                break;
         }
-
+        
         this->lastTouchMillis = millis();
         this->notifyObservers(&e);
         return INACTIVATE_AFTER_MS;
@@ -378,7 +376,7 @@ int32_t CannedMessageModule::runOnce()
         return INACTIVATE_AFTER_MS;
     }
 
-    return INT32_MAX;
+    return INT32_MAX; 
 }
 
 const char *CannedMessageModule::getCurrentMessage()
@@ -393,15 +391,14 @@ const char *CannedMessageModule::getNextMessage()
 {
     return this->messages[this->getNextIndex()];
 }
-const char *CannedMessageModule::getNodeName(NodeNum node)
-{
-    if (node == NODENUM_BROADCAST) {
+const char* CannedMessageModule::getNodeName(NodeNum node) {
+    if (node == NODENUM_BROADCAST){
         return "Broadcast";
-    } else {
+    }else{
         meshtastic_NodeInfo *info = nodeDB.getNode(node);
-        if (info != NULL) {
+        if(info != NULL) {
             return info->user.long_name;
-        } else {
+        }else{
             return "Unknown";
         }
     }
@@ -447,7 +444,7 @@ void CannedMessageModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *st
         display->setTextAlignment(TEXT_ALIGN_LEFT);
         display->setFont(FONT_SMALL);
         display->drawString(10 + x, 0 + y + FONT_HEIGHT_SMALL, "Canned Message\nModule disabled.");
-    } else if (cannedMessageModule->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT) {
+    }else if (cannedMessageModule->runState == CANNED_MESSAGE_RUN_STATE_FREETEXT) {
         display->setTextAlignment(TEXT_ALIGN_LEFT);
         display->setFont(FONT_SMALL);
         if (this->destSelect) {
@@ -457,15 +454,13 @@ void CannedMessageModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *st
         }
         display->drawStringf(0 + x, 0 + y, buffer, "To: %s", cannedMessageModule->getNodeName(this->dest));
         // used chars right aligned
-        snprintf(buffer, sizeof(buffer), "%d left", meshtastic_Constants_DATA_PAYLOAD_LEN - this->freetext.length());
+        sprintf(buffer, "%d left", meshtastic_Constants_DATA_PAYLOAD_LEN - this->freetext.length());
         display->drawString(x + display->getWidth() - display->getStringWidth(buffer), y + 0, buffer);
         if (this->destSelect) {
             display->drawString(x + display->getWidth() - display->getStringWidth(buffer) - 1, y + 0, buffer);
         }
         display->setColor(WHITE);
-        display->drawStringMaxWidth(
-            0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(),
-            cannedMessageModule->drawWithCursor(cannedMessageModule->freetext, cannedMessageModule->cursor));
+        display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), cannedMessageModule->drawWithCursor(cannedMessageModule->freetext, cannedMessageModule->cursor));
     } else {
         if (this->messagesCount > 0) {
             display->setTextAlignment(TEXT_ALIGN_LEFT);
@@ -483,9 +478,8 @@ void CannedMessageModule::drawFrame(OLEDDisplay *display, OLEDDisplayUiState *st
 
 void CannedMessageModule::loadProtoForModule()
 {
-    if (!nodeDB.loadProto(cannedMessagesConfigFile, meshtastic_CannedMessageModuleConfig_size,
-                          sizeof(meshtastic_CannedMessageModuleConfig), &meshtastic_CannedMessageModuleConfig_msg,
-                          &cannedMessageModuleConfig)) {
+    if (!loadProto(cannedMessagesConfigFile, meshtastic_CannedMessageModuleConfig_size, sizeof(cannedMessagesConfigFile),
+                   &meshtastic_CannedMessageModuleConfig_msg, &cannedMessageModuleConfig)) {
         installDefaultCannedMessageModuleConfig();
     }
 }
@@ -504,8 +498,8 @@ bool CannedMessageModule::saveProtoForModule()
     FS.mkdir("/prefs");
 #endif
 
-    okay &= nodeDB.saveProto(cannedMessagesConfigFile, meshtastic_CannedMessageModuleConfig_size,
-                             &meshtastic_CannedMessageModuleConfig_msg, &cannedMessageModuleConfig);
+    okay &= saveProto(cannedMessagesConfigFile, meshtastic_CannedMessageModuleConfig_size,
+        &meshtastic_CannedMessageModuleConfig_msg, &cannedMessageModuleConfig);
 
     return okay;
 }
@@ -527,21 +521,20 @@ void CannedMessageModule::installDefaultCannedMessageModuleConfig()
  * @return AdminMessageHandleResult HANDLED if message was handled
  *   HANDLED_WITH_RESULT if a result is also prepared.
  */
-AdminMessageHandleResult CannedMessageModule::handleAdminMessageForModule(const meshtastic_MeshPacket &mp,
-                                                                          meshtastic_AdminMessage *request,
+AdminMessageHandleResult CannedMessageModule::handleAdminMessageForModule(const meshtastic_MeshPacket &mp, meshtastic_AdminMessage *request,
                                                                           meshtastic_AdminMessage *response)
 {
     AdminMessageHandleResult result;
 
     switch (request->which_payload_variant) {
     case meshtastic_AdminMessage_get_canned_message_module_messages_request_tag:
-        LOG_DEBUG("Client is getting radio canned messages\n");
+        DEBUG_MSG("Client is getting radio canned messages\n");
         this->handleGetCannedMessageModuleMessages(mp, response);
         result = AdminMessageHandleResult::HANDLED_WITH_RESPONSE;
         break;
 
     case meshtastic_AdminMessage_set_canned_message_module_messages_tag:
-        LOG_DEBUG("Client is setting radio canned messages\n");
+        DEBUG_MSG("Client is setting radio canned messages\n");
         this->handleSetCannedMessageModuleMessages(request->set_canned_message_module_messages);
         result = AdminMessageHandleResult::HANDLED;
         break;
@@ -553,16 +546,15 @@ AdminMessageHandleResult CannedMessageModule::handleAdminMessageForModule(const 
     return result;
 }
 
-void CannedMessageModule::handleGetCannedMessageModuleMessages(const meshtastic_MeshPacket &req,
-                                                               meshtastic_AdminMessage *response)
+void CannedMessageModule::handleGetCannedMessageModuleMessages(const meshtastic_MeshPacket &req, meshtastic_AdminMessage *response)
 {
-    LOG_DEBUG("*** handleGetCannedMessageModuleMessages\n");
-    if (req.decoded.want_response) {
-        response->which_payload_variant = meshtastic_AdminMessage_get_canned_message_module_messages_response_tag;
-        strncpy(response->get_canned_message_module_messages_response, cannedMessageModuleConfig.messages,
-                sizeof(response->get_canned_message_module_messages_response));
-    } // Don't send anything if not instructed to. Better than asserting.
+    DEBUG_MSG("*** handleGetCannedMessageModuleMessages\n");
+    assert(req.decoded.want_response);
+
+    response->which_payload_variant = meshtastic_AdminMessage_get_canned_message_module_messages_response_tag;
+    strcpy(response->get_canned_message_module_messages_response, cannedMessageModuleConfig.messages);
 }
+
 
 void CannedMessageModule::handleSetCannedMessageModuleMessages(const char *from_msg)
 {
@@ -570,8 +562,8 @@ void CannedMessageModule::handleSetCannedMessageModuleMessages(const char *from_
 
     if (*from_msg) {
         changed |= strcmp(cannedMessageModuleConfig.messages, from_msg);
-        strncpy(cannedMessageModuleConfig.messages, from_msg, sizeof(cannedMessageModuleConfig.messages));
-        LOG_DEBUG("*** from_msg.text:%s\n", from_msg);
+        strcpy(cannedMessageModuleConfig.messages, from_msg);
+        DEBUG_MSG("*** from_msg.text:%s\n", from_msg);
     }
 
     if (changed) {
@@ -581,7 +573,9 @@ void CannedMessageModule::handleSetCannedMessageModuleMessages(const char *from_
 
 String CannedMessageModule::drawWithCursor(String text, int cursor)
 {
-    String result = text.substring(0, cursor) + "_" + text.substring(cursor);
+    String result = text.substring(0, cursor)
+    + "_" 
+    + text.substring(cursor);
     return result;
 }
 

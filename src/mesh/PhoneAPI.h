@@ -16,15 +16,14 @@
  * Eventually there should be once instance of this class for each live connection (because it has a bit of state
  * for that connection)
  */
-class PhoneAPI
-    : public Observer<uint32_t> // FIXME, we shouldn't be inheriting from Observer, instead use CallbackObserver as a member
+class PhoneAPI : public Observer<uint32_t> // FIXME, we shouldn't be inheriting from Observer, instead use CallbackObserver as a member
 {
     enum State {
-        STATE_SEND_NOTHING,      // Initial state, don't send anything until the client starts asking for config
-        STATE_SEND_MY_INFO,      // send our my info record
-        STATE_SEND_NODEINFO,     // states progress in this order as the device sends to to the client
-        STATE_SEND_CHANNELS,     // Send all channels
-        STATE_SEND_CONFIG,       // Replacement for the old Radioconfig
+        STATE_SEND_NOTHING, // Initial state, don't send anything until the client starts asking for config
+        STATE_SEND_MY_INFO, // send our my info record
+        STATE_SEND_NODEINFO, // states progress in this order as the device sends to to the client
+        STATE_SEND_CHANNELS, // Send all channels
+        STATE_SEND_CONFIG, // Replacement for the old Radioconfig
         STATE_SEND_MODULECONFIG, // Send Module specific config
         STATE_SEND_COMPLETE_ID,
         STATE_SEND_PACKETS // send packets or debug strings
@@ -46,14 +45,10 @@ class PhoneAPI
     // file transfer packets destined for phone. Push it to the queue then free it.
     meshtastic_XModem xmodemPacketForPhone = meshtastic_XModem_init_zero;
 
-    // Keep QueueStatus packet just as packetForPhone
-    meshtastic_QueueStatus *queueStatusPacketForPhone = NULL;
-
     /// We temporarily keep the nodeInfo here between the call to available and getFromRadio
     const meshtastic_NodeInfo *nodeInfoForPhone = NULL;
 
-    meshtastic_ToRadio toRadioScratch = {
-        0}; // this is a static scratch object, any data must be copied elsewhere before returning
+    meshtastic_ToRadio toRadioScratch = {0}; // this is a static scratch object, any data must be copied elsewhere before returning
 
     /// Use to ensure that clients don't get confused about old messages from the radio
     uint32_t config_nonce = 0;
@@ -67,7 +62,7 @@ class PhoneAPI
     // Call this when the client drops the connection, resets the state to STATE_SEND_NOTHING
     // Unregisters our observer.  A closed connection **can** be reopened by calling init again.
     virtual void close();
-
+    
     /**
      * Handle a ToRadio protobuf
      * @return true true if a packet was queued for sending (so that caller can yield)
@@ -91,13 +86,16 @@ class PhoneAPI
 
     void setInitialState() { state = STATE_SEND_MY_INFO; }
 
+    /// emit a debugging log character, FIXME - implement
+    void debugOut(char c) { }
+
   protected:
     /// Our fromradio packet while it is being assembled
     meshtastic_FromRadio fromRadioScratch = {};
 
     /** the last msec we heard from the client on the other side of this link */
     uint32_t lastContactMsec = 0;
-
+    
     /// Hookable to find out when connection changes
     virtual void onConnectionChanged(bool connected) {}
 
@@ -119,8 +117,6 @@ class PhoneAPI
 
   private:
     void releasePhonePacket();
-
-    void releaseQueueStatusPhonePacket();
 
     /// begin a new connection
     void handleStartConfig();

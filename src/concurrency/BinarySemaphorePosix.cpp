@@ -1,14 +1,18 @@
-#include "concurrency/BinarySemaphorePosix.h"
 #include "configuration.h"
+#include "concurrency/BinarySemaphorePosix.h"
 
 #ifndef HAS_FREE_RTOS
 
 namespace concurrency
 {
 
-BinarySemaphorePosix::BinarySemaphorePosix() {}
+BinarySemaphorePosix::BinarySemaphorePosix()
+{
+}
 
-BinarySemaphorePosix::~BinarySemaphorePosix() {}
+BinarySemaphorePosix::~BinarySemaphorePosix()
+{
+}
 
 /**
  * Returns false if we timed out
@@ -19,9 +23,13 @@ bool BinarySemaphorePosix::take(uint32_t msec)
     return false;
 }
 
-void BinarySemaphorePosix::give() {}
+void BinarySemaphorePosix::give()
+{
+}
 
-IRAM_ATTR void BinarySemaphorePosix::giveFromISR(BaseType_t *pxHigherPriorityTaskWoken) {}
+IRAM_ATTR void BinarySemaphorePosix::giveFromISR(BaseType_t *pxHigherPriorityTaskWoken)
+{
+}
 
 } // namespace concurrency
 

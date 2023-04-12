@@ -8,7 +8,7 @@
 
 static TFT_eSPI tft = TFT_eSPI(); // Invoke library, pins defined in User_Setup.h
 
-TFTDisplay::TFTDisplay(uint8_t address, int sda, int scl, uint8_t screen_model)
+TFTDisplay::TFTDisplay(uint8_t address, int sda, int scl)
 {
 #ifdef SCREEN_ROTATE
     setGeometry(GEOMETRY_RAWMODE, TFT_HEIGHT, TFT_WIDTH);
@@ -22,7 +22,7 @@ void TFTDisplay::display(void)
 {
     concurrency::LockGuard g(spiLock);
 
-    uint16_t x, y;
+    uint16_t x,y;
 
     for (y = 0; y < displayHeight; y++) {
         for (x = 0; x < displayWidth; x++) {
@@ -59,7 +59,7 @@ void TFTDisplay::setDetected(uint8_t detected)
 bool TFTDisplay::connect()
 {
     concurrency::LockGuard g(spiLock);
-    LOG_INFO("Doing TFT init\n");
+    DEBUG_MSG("Doing TFT init\n");
 
 #ifdef TFT_BL
     digitalWrite(TFT_BL, HIGH);

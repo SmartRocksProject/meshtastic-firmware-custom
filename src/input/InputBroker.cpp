@@ -3,7 +3,9 @@
 
 InputBroker *inputBroker;
 
-InputBroker::InputBroker(){};
+InputBroker::InputBroker()
+{
+};
 
 void InputBroker::registerSource(Observable<const InputEvent *> *source)
 {
@@ -12,7 +14,7 @@ void InputBroker::registerSource(Observable<const InputEvent *> *source)
 
 int InputBroker::handleInputEvent(const InputEvent *event)
 {
-    powerFSM.trigger(EVENT_INPUT);
-    this->notifyObservers(event);
-    return 0;
+  powerFSM.trigger(EVENT_INPUT);
+  this->notifyObservers(event);
+  return 0;
 }

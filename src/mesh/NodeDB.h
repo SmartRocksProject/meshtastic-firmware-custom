@@ -32,9 +32,6 @@ extern meshtastic_User &owner;
 /// Given a node, return how many seconds in the past (vs now) that we last heard from it
 uint32_t sinceLastSeen(const meshtastic_NodeInfo *n);
 
-/// Given a packet, return how many seconds in the past (vs now) it was received
-uint32_t sinceReceived(const meshtastic_MeshPacket *p);
-
 class NodeDB
 {
     // NodeNum provisionalNodeNum; // if we are trying to find a node num this is our current attempt
@@ -49,7 +46,7 @@ class NodeDB
     uint32_t readPointer = 0;
 
   public:
-    bool updateGUI = false; // we think the gui should definitely be redrawn, screen will clear this once handled
+    bool updateGUI = false;            // we think the gui should definitely be redrawn, screen will clear this once handled
     meshtastic_NodeInfo *updateGUIforNode = NULL; // if currently showing this node, we think you should update the GUI
     Observable<const meshtastic::NodeStatus *> newStatus;
 
@@ -61,8 +58,7 @@ class NodeDB
     void init();
 
     /// write to flash
-    void saveToDisk(int saveWhat = SEGMENT_CONFIG | SEGMENT_MODULECONFIG | SEGMENT_DEVICESTATE | SEGMENT_CHANNELS),
-        saveChannelsToDisk(), saveDeviceStateToDisk();
+    void saveToDisk(int saveWhat = SEGMENT_CONFIG | SEGMENT_MODULECONFIG | SEGMENT_DEVICESTATE | SEGMENT_CHANNELS), saveChannelsToDisk(), saveDeviceStateToDisk();
 
     /** Reinit radio config if needed, because either:
      * a) sometimes a buggy android app might send us bogus settings or
@@ -126,13 +122,8 @@ class NodeDB
     size_t getNumOnlineNodes();
 
     void initConfigIntervals(), initModuleConfigIntervals(), resetNodes();
-
+    
     bool factoryReset();
-
-    bool loadProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields, void *dest_struct);
-    bool saveProto(const char *filename, size_t protoSize, const pb_msgdesc_t *fields, const void *dest_struct);
-
-    void installRoleDefaults(meshtastic_Config_DeviceConfig_Role role);
 
   private:
     /// Find a node in our DB, create an empty NodeInfo if missing
@@ -146,11 +137,13 @@ class NodeDB
         newStatus.notifyObservers(&status);
     }
 
+
     /// read our db from flash
     void loadFromDisk();
 
     /// Reinit device state from scratch (not loading from disk)
-    void installDefaultDeviceState(), installDefaultChannels(), installDefaultConfig(), installDefaultModuleConfig();
+    void installDefaultDeviceState(), installDefaultChannels(), installDefaultConfig(),
+        installDefaultModuleConfig();
 };
 
 /**
@@ -187,8 +180,7 @@ extern NodeDB nodeDB;
 // Our delay functions check for this for times that should never expire
 #define NODE_DELAY_FOREVER 0xffffffff
 
-#define IF_ROUTER(routerVal, normalVal)                                                                                          \
-    ((config.device.role == meshtastic_Config_DeviceConfig_Role_ROUTER) ? (routerVal) : (normalVal))
+#define IF_ROUTER(routerVal, normalVal) ((config.device.role == meshtastic_Config_DeviceConfig_Role_ROUTER) ? (routerVal) : (normalVal))
 
 #define ONE_DAY 24 * 60 * 60
 
@@ -208,15 +200,13 @@ extern NodeDB nodeDB;
 
 inline uint32_t getConfiguredOrDefaultMs(uint32_t configuredInterval)
 {
-    if (configuredInterval > 0)
-        return configuredInterval * 1000;
+    if (configuredInterval > 0) return configuredInterval * 1000;
     return default_broadcast_interval_secs * 1000;
 }
 
 inline uint32_t getConfiguredOrDefaultMs(uint32_t configuredInterval, uint32_t defaultInterval)
 {
-    if (configuredInterval > 0)
-        return configuredInterval * 1000;
+    if (configuredInterval > 0) return configuredInterval * 1000;
     return defaultInterval * 1000;
 }
 
@@ -225,7 +215,4 @@ inline uint32_t getConfiguredOrDefaultMs(uint32_t configuredInterval, uint32_t d
  */
 extern uint32_t radioGeneration;
 
-#define Module_Config_size                                                                                                       \
-    (ModuleConfig_CannedMessageConfig_size + ModuleConfig_ExternalNotificationConfig_size + ModuleConfig_MQTTConfig_size +       \
-     ModuleConfig_RangeTestConfig_size + ModuleConfig_SerialConfig_size + ModuleConfig_StoreForwardConfig_size +                 \
-     ModuleConfig_TelemetryConfig_size + ModuleConfig_size)
+#define Module_Config_size (ModuleConfig_CannedMessageConfig_size + meshtastic_ModuleConfig_ExternalNotificationConfig_size + meshtastic_ModuleConfig_MQTTConfig_size + meshtastic_ModuleConfig_RangeTestConfig_size + meshtastic_ModuleConfig_SerialConfig_size + meshtastic_ModuleConfig_StoreForwardConfig_size + meshtastic_ModuleConfig_TelemetryConfig_size + meshtastic_ModuleConfig_size)

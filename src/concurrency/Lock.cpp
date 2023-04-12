@@ -1,5 +1,5 @@
-#include "Lock.h"
 #include "configuration.h"
+#include "Lock.h"
 #include <cassert>
 
 namespace concurrency

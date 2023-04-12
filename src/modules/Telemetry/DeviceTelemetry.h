@@ -9,10 +9,10 @@ class DeviceTelemetryModule : private concurrency::OSThread, public ProtobufModu
 {
   public:
     DeviceTelemetryModule()
-        : concurrency::OSThread("DeviceTelemetryModule"),
-          ProtobufModule("DeviceTelemetry", meshtastic_PortNum_TELEMETRY_APP, &meshtastic_Telemetry_msg)
+        : concurrency::OSThread("DeviceTelemetryModule"), ProtobufModule("DeviceTelemetry", meshtastic_PortNum_TELEMETRY_APP, &meshtastic_Telemetry_msg)
     {
-        setIntervalFromNow(10 * 1000);
+      lastMeasurementPacket = nullptr;
+      setIntervalFromNow(10 * 1000);
     }
     virtual bool wantUIFrame() { return false; }
 
@@ -30,4 +30,5 @@ class DeviceTelemetryModule : private concurrency::OSThread, public ProtobufModu
   private:
     uint32_t sendToPhoneIntervalMs = SECONDS_IN_MINUTE * 1000; // Send to phone every minute
     uint32_t lastSentToMesh = 0;
+    const meshtastic_MeshPacket *lastMeasurementPacket;
 };

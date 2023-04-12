@@ -1,8 +1,8 @@
+#include "configuration.h"
 #include "MeshModule.h"
 #include "Channels.h"
 #include "MeshService.h"
 #include "NodeDB.h"
-#include "configuration.h"
 #include "modules/RoutingModule.h"
 #include <assert.h>
 
@@ -44,8 +44,7 @@ meshtastic_MeshPacket *MeshModule::allocAckNak(meshtastic_Routing_Error err, Nod
     // auto p = allocDataProtobuf(c);
     meshtastic_MeshPacket *p = router->allocForSending();
     p->decoded.portnum = meshtastic_PortNum_ROUTING_APP;
-    p->decoded.payload.size =
-        pb_encode_to_bytes(p->decoded.payload.bytes, sizeof(p->decoded.payload.bytes), &meshtastic_Routing_msg, &c);
+    p->decoded.payload.size = pb_encode_to_bytes(p->decoded.payload.bytes, sizeof(p->decoded.payload.bytes), &meshtastic_Routing_msg, &c);
 
     p->priority = meshtastic_MeshPacket_Priority_ACK;
 
@@ -53,7 +52,7 @@ meshtastic_MeshPacket *MeshModule::allocAckNak(meshtastic_Routing_Error err, Nod
     p->to = to;
     p->decoded.request_id = idFrom;
     p->channel = chIndex;
-    LOG_ERROR("Alloc an err=%d,to=0x%x,idFrom=0x%x,id=0x%x\n", err, to, idFrom, p->id);
+    DEBUG_MSG("Alloc an err=%d,to=0x%x,idFrom=0x%x,id=0x%x\n", err, to, idFrom, p->id);
 
     return p;
 }
@@ -69,7 +68,7 @@ meshtastic_MeshPacket *MeshModule::allocErrorResponse(meshtastic_Routing_Error e
 
 void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
 {
-    // LOG_DEBUG("In call modules\n");
+    // DEBUG_MSG("In call modules\n");
     bool moduleFound = false;
 
     // We now allow **encrypted** packets to pass through the modules
@@ -97,7 +96,7 @@ void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
         assert(!pi.myReply); // If it is !null it means we have a bug, because it should have been sent the previous time
 
         if (wantsPacket) {
-            LOG_DEBUG("Module '%s' wantsPacket=%d\n", pi.name, wantsPacket);
+            DEBUG_MSG("Module '%s' wantsPacket=%d\n", pi.name, wantsPacket);
 
             moduleFound = true;
 
@@ -107,8 +106,8 @@ void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
             /// Is the channel this packet arrived on acceptable? (security check)
             /// Note: we can't know channel names for encrypted packets, so those are NEVER sent to boundChannel modules
 
-            /// Also: if a packet comes in on the local PC interface, we don't check for bound channels, because it is TRUSTED and
-            /// it needs to to be able to fetch the initial admin packets without yet knowing any channels.
+            /// Also: if a packet comes in on the local PC interface, we don't check for bound channels, because it is TRUSTED and it needs to
+            /// to be able to fetch the initial admin packets without yet knowing any channels.
 
             bool rxChannelOk = !pi.boundChannel || (mp.from == 0) || (strcasecmp(ch->settings.name, pi.boundChannel) == 0);
 
@@ -135,20 +134,20 @@ void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
                 // any other node.
                 if (mp.decoded.want_response && toUs && (getFrom(&mp) != ourNodeNum || mp.to == ourNodeNum) && !currentReply) {
                     pi.sendResponse(mp);
-                    LOG_INFO("Module '%s' sent a response\n", pi.name);
+                    DEBUG_MSG("Module '%s' sent a response\n", pi.name);
                 } else {
-                    LOG_DEBUG("Module '%s' considered\n", pi.name);
+                    DEBUG_MSG("Module '%s' considered\n", pi.name);
                 }
 
                 // If the requester didn't ask for a response we might need to discard unused replies to prevent memory leaks
                 if (pi.myReply) {
-                    LOG_DEBUG("Discarding an unneeded response\n");
+                    DEBUG_MSG("Discarding an unneeded response\n");
                     packetPool.release(pi.myReply);
                     pi.myReply = NULL;
                 }
 
                 if (handled == ProcessMessage::STOP) {
-                    LOG_DEBUG("Module '%s' handled and skipped other processing\n", pi.name);
+                    DEBUG_MSG("Module '%s' handled and skipped other processing\n", pi.name);
                     break;
                 }
             }
@@ -162,11 +161,11 @@ void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
             printPacket("Sending response", currentReply);
             service.sendToMesh(currentReply);
             currentReply = NULL;
-        } else if (mp.from != ourNodeNum) {
+        } else if(mp.from != ourNodeNum) {
             // Note: if the message started with the local node we don't want to send a no response reply
 
             // No one wanted to reply to this requst, tell the requster that happened
-            LOG_DEBUG("No one responded, send a nak\n");
+            DEBUG_MSG("No one responded, send a nak\n");
 
             // SECURITY NOTE! I considered sending back a different error code if we didn't find the psk (i.e. !isDecoded)
             // but opted NOT TO.  Because it is not a good idea to let remote nodes 'probe' to find out which PSKs were "good" vs
@@ -176,8 +175,9 @@ void MeshModule::callPlugins(const meshtastic_MeshPacket &mp, RxSource src)
     }
 
     if (!moduleFound)
-        LOG_DEBUG("No modules interested in portnum=%d, src=%s\n", mp.decoded.portnum,
-                  (src == RX_SRC_LOCAL) ? "LOCAL" : "REMOTE");
+        DEBUG_MSG("No modules interested in portnum=%d, src=%s\n",
+                    mp.decoded.portnum,
+                    (src == RX_SRC_LOCAL) ? "LOCAL":"REMOTE");
 }
 
 meshtastic_MeshPacket *MeshModule::allocReply()
@@ -199,7 +199,7 @@ void MeshModule::sendResponse(const meshtastic_MeshPacket &req)
         currentReply = r;
     } else {
         // Ignore - this is now expected behavior for routing module (because it ignores some replies)
-        // LOG_WARN("Client requested response but this module did not provide\n");
+        // DEBUG_MSG("WARNING: Client requested response but this module did not provide\n");
     }
 }
 
@@ -227,7 +227,7 @@ std::vector<MeshModule *> MeshModule::GetMeshModulesWithUIFrames()
         for (auto i = modules->begin(); i != modules->end(); ++i) {
             auto &pi = **i;
             if (pi.wantUIFrame()) {
-                LOG_DEBUG("Module wants a UI Frame\n");
+                DEBUG_MSG("Module wants a UI Frame\n");
                 modulesWithUIFrames.push_back(&pi);
             }
         }
@@ -235,34 +235,40 @@ std::vector<MeshModule *> MeshModule::GetMeshModulesWithUIFrames()
     return modulesWithUIFrames;
 }
 
-void MeshModule::observeUIEvents(Observer<const UIFrameEvent *> *observer)
+void MeshModule::observeUIEvents(
+    Observer<const UIFrameEvent *> *observer)
 {
     if (modules) {
         for (auto i = modules->begin(); i != modules->end(); ++i) {
             auto &pi = **i;
-            Observable<const UIFrameEvent *> *observable = pi.getUIFrameObservable();
+            Observable<const UIFrameEvent *> *observable =
+                pi.getUIFrameObservable();
             if (observable != NULL) {
-                LOG_DEBUG("Module wants a UI Frame\n");
+                DEBUG_MSG("Module wants a UI Frame\n");
                 observer->observe(observable);
             }
         }
     }
 }
 
-AdminMessageHandleResult MeshModule::handleAdminMessageForAllPlugins(const meshtastic_MeshPacket &mp,
-                                                                     meshtastic_AdminMessage *request,
-                                                                     meshtastic_AdminMessage *response)
+AdminMessageHandleResult MeshModule::handleAdminMessageForAllPlugins(const meshtastic_MeshPacket &mp, meshtastic_AdminMessage *request, meshtastic_AdminMessage *response)
 {
     AdminMessageHandleResult handled = AdminMessageHandleResult::NOT_HANDLED;
     if (modules) {
         for (auto i = modules->begin(); i != modules->end(); ++i) {
             auto &pi = **i;
             AdminMessageHandleResult h = pi.handleAdminMessageForModule(mp, request, response);
-            if (h == AdminMessageHandleResult::HANDLED_WITH_RESPONSE) {
+            if (h == AdminMessageHandleResult::HANDLED_WITH_RESPONSE)
+            {
                 // In case we have a response it always has priority.
-                LOG_DEBUG("Reply prepared by module '%s' of variant: %d\n", pi.name, response->which_payload_variant);
+                DEBUG_MSG("Reply prepared by module '%s' of variant: %d\n",
+                    pi.name,
+                    response->which_payload_variant);
                 handled = h;
-            } else if ((handled != AdminMessageHandleResult::HANDLED_WITH_RESPONSE) && (h == AdminMessageHandleResult::HANDLED)) {
+            }
+            else if ((handled != AdminMessageHandleResult::HANDLED_WITH_RESPONSE) &&
+                (h == AdminMessageHandleResult::HANDLED))
+            {
                 // In case the message is handled it should be populated, but will not overwrite
                 //   a result with response.
                 handled = h;

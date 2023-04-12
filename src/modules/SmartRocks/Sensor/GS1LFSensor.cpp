@@ -5,14 +5,14 @@
 #include "main.h" 
 
 bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
-    LOG_INFO("Init sensor: GS1LFSensor\n");
+    DEBUG_MSG("Init sensor: GS1LFSensor\n");
     if(!hasSensor()) {
-        LOG_INFO("Could not find sensor: GS1LFSensor\n");
+        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
         return false;
     }
 
     if(!ADS.begin(I2C_SDA, I2C_SCL)) {
-        LOG_INFO("Could not find sensor: GS1LFSensor\n");
+        DEBUG_MSG("Could not find sensor: GS1LFSensor\n");
         return false;
     }
 
@@ -50,7 +50,7 @@ bool GS1LFSensor::hasSensor() {
     // Check I2C wire for GS1LFSensor address
     Wire.beginTransmission(GS1LF_ADDR);
     if(Wire.endTransmission() == 0) {
-        LOG_DEBUG("GS1LFSensor found at address 0x%x\n", GS1LF_ADDR);
+        DEBUG_MSG("GS1LFSensor found at address 0x%x\n", GS1LF_ADDR);
         return true;
     }
     return false;
@@ -62,6 +62,6 @@ bool GS1LFSensor::readVoltage(float& out_voltage) {
         return false;
     }
     out_voltage = voltage;
-    //LOG_INFO("GS1LFSensor::readVoltage: %f Volts\n", voltage);
+    //DEBUG_MSG("GS1LFSensor::readVoltage: %f Volts\n", voltage);
     return true;
 }

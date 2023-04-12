@@ -1,8 +1,5 @@
 #pragma once
 #include "ProtobufModule.h"
-#ifdef ARCH_ESP32
-#include "mesh/http/WiFiAPClient.h"
-#endif
 
 /**
  * Admin module for admin messages
@@ -34,7 +31,7 @@ class AdminModule : public ProtobufModule<meshtastic_AdminMessage>
     void handleGetModuleConfig(const meshtastic_MeshPacket &req, uint32_t configType);
     void handleGetChannel(const meshtastic_MeshPacket &req, uint32_t channelIndex);
     void handleGetDeviceMetadata(const meshtastic_MeshPacket &req);
-    void handleGetDeviceConnectionStatus(const meshtastic_MeshPacket &req);
+
     /**
      * Setters
      */
@@ -43,7 +40,6 @@ class AdminModule : public ProtobufModule<meshtastic_AdminMessage>
     void handleSetConfig(const meshtastic_Config &c);
     void handleSetModuleConfig(const meshtastic_ModuleConfig &c);
     void handleSetChannel();
-    void handleSetHamMode(const meshtastic_HamParameters &req);
     void reboot(int32_t seconds);
 };
 

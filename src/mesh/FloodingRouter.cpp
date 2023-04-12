@@ -29,13 +29,12 @@ bool FloodingRouter::shouldFilterReceived(const meshtastic_MeshPacket *p)
 
 void FloodingRouter::sniffReceived(const meshtastic_MeshPacket *p, const meshtastic_Routing *c)
 {
-    bool isAck =
-        ((c && c->error_reason == meshtastic_Routing_Error_NONE)); // consider only ROUTING_APP message without error as ACK
+    bool isAck = ((c && c->error_reason == meshtastic_Routing_Error_NONE)); // consider only ROUTING_APP message without error as ACK
     if (isAck && p->to != getNodeNum()) {
-        // do not flood direct message that is ACKed
-        LOG_DEBUG("Receiving an ACK not for me, but don't need to rebroadcast this direct message anymore.\n");
-        Router::cancelSending(p->to, p->decoded.request_id); // cancel rebroadcast for this DM
-    }
+        // do not flood direct message that is ACKed 
+        DEBUG_MSG("Receiving an ACK not for me, but don't need to rebroadcast this direct message anymore.\n");
+        Router::cancelSending(p->to, p->decoded.request_id);   // cancel rebroadcast for this DM
+    } 
     if ((p->to != getNodeNum()) && (p->hop_limit > 0) && (getFrom(p) != getNodeNum())) {
         if (p->id != 0) {
             if (config.device.role != meshtastic_Config_DeviceConfig_Role_CLIENT_MUTE) {
@@ -48,17 +47,20 @@ void FloodingRouter::sniffReceived(const meshtastic_MeshPacket *p, const meshtas
                     traceRouteModule->updateRoute(tosend);
                 }
 
-                LOG_INFO("Rebroadcasting received floodmsg to neighbors\n");
+                printPacket("Rebroadcasting received floodmsg to neighbors", p);
                 // Note: we are careful to resend using the original senders node id
                 // We are careful not to call our hooked version of send() - because we don't want to check this again
                 Router::send(tosend);
+
             } else {
-                LOG_DEBUG("Not rebroadcasting. Role = Role_ClientMute\n");
+                DEBUG_MSG("Not rebroadcasting. Role = Role_ClientMute\n");
             }
+
         } else {
-            LOG_DEBUG("Ignoring a simple (0 id) broadcast\n");
+            DEBUG_MSG("Ignoring a simple (0 id) broadcast\n");
         }
     }
+
     // handle the packet as normal
     Router::sniffReceived(p, c);
 }

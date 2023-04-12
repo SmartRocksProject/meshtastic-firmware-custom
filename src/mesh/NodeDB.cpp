@@ -1,4 +1,5 @@
 #include "configuration.h"
+#include <assert.h>
 
 #include "Channels.h"
 #include "CryptoEngine.h"
@@ -13,9 +14,9 @@
 #include "error.h"
 #include "main.h"
 #include "mesh-pb-constants.h"
-#include <ErriezCRC32.h>
 #include <pb_decode.h>
 #include <pb_encode.h>
+#include <ErriezCRC32.h>
 
 #ifdef ARCH_ESP32
 #include "mesh/http/WiFiAPClient.h"
@@ -81,11 +82,11 @@ bool NodeDB::resetRadioConfig(bool factory_reset)
     radioGeneration++;
 
     if (factory_reset) {
-        didFactoryReset = factoryReset();
+       didFactoryReset = factoryReset();
     }
 
     if (channelFile.channels_count != MAX_NUM_CHANNELS) {
-        LOG_INFO("Setting default channel and radio preferences!\n");
+        DEBUG_MSG("Setting default channel and radio preferences!\n");
 
         channels.initDefaults();
     }
@@ -95,7 +96,7 @@ bool NodeDB::resetRadioConfig(bool factory_reset)
     // temp hack for quicker testing
     // devicestate.no_save = true;
     if (devicestate.no_save) {
-        LOG_DEBUG("***** DEVELOPMENT MODE - DO NOT RELEASE *****\n");
+        DEBUG_MSG("***** DEVELOPMENT MODE - DO NOT RELEASE *****\n");
 
         // Sleep quite frequently to stress test the BLE comms, broadcast position every 6 mins
         config.display.screen_on_secs = 10;
@@ -113,7 +114,7 @@ bool NodeDB::resetRadioConfig(bool factory_reset)
     initRegion();
 
     if (didFactoryReset) {
-        LOG_INFO("Rebooting due to factory reset");
+        DEBUG_MSG("Rebooting due to factory reset");
         screen->startRebootScreen();
         rebootAtMsec = millis() + (5 * 1000);
     }
@@ -121,9 +122,9 @@ bool NodeDB::resetRadioConfig(bool factory_reset)
     return didFactoryReset;
 }
 
-bool NodeDB::factoryReset()
+bool NodeDB::factoryReset() 
 {
-    LOG_INFO("Performing factory reset!\n");
+    DEBUG_MSG("Performing factory reset!\n");
     // first, remove the "/prefs" (this removes most prefs)
     rmDir("/prefs");
     // second, install default state (this will deal with the duplicate mac address issue)
@@ -139,7 +140,7 @@ bool NodeDB::factoryReset()
 #endif
 #ifdef ARCH_NRF52
     Bluefruit.begin();
-    LOG_INFO("Clearing bluetooth bonds!\n");
+    DEBUG_MSG("Clearing bluetooth bonds!\n");
     bond_print_list(BLE_GAP_ROLE_PERIPH);
     bond_print_list(BLE_GAP_ROLE_CENTRAL);
     Bluefruit.Periph.clearBonds();
@@ -150,7 +151,7 @@ bool NodeDB::factoryReset()
 
 void NodeDB::installDefaultConfig()
 {
-    LOG_INFO("Installing default LocalConfig\n");
+    DEBUG_MSG("Installing default LocalConfig\n");
     memset(&config, 0, sizeof(meshtastic_LocalConfig));
     config.version = DEVICESTATE_CUR_VER;
     config.has_device = true;
@@ -160,11 +161,8 @@ void NodeDB::installDefaultConfig()
     config.has_power = true;
     config.has_network = true;
     config.has_bluetooth = true;
-    config.device.rebroadcast_mode = meshtastic_Config_DeviceConfig_RebroadcastMode_ALL;
-    config.lora.sx126x_rx_boosted_gain = false;
-    config.lora.tx_enabled =
-        true; // FIXME: maybe false in the future, and setting region to enable it. (unset region forces it off)
-    config.lora.override_duty_cycle = false;
+    config.lora.tx_enabled = true; // FIXME: maybe false in the future, and setting region to enable it. (unset region forces it off)
+    config.lora.override_duty_cycle = false; 
     config.lora.region = meshtastic_Config_LoRaConfig_RegionCode_UNSET;
     config.lora.modem_preset = meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST;
     config.lora.hop_limit = HOP_RELIABLE;
@@ -181,16 +179,14 @@ void NodeDB::installDefaultConfig()
 #else
     bool hasScreen = screen_found;
 #endif
-    config.bluetooth.mode = hasScreen ? meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN
-                                      : meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
+    config.bluetooth.mode = hasScreen ? meshtastic_Config_BluetoothConfig_PairingMode_RANDOM_PIN : meshtastic_Config_BluetoothConfig_PairingMode_FIXED_PIN;
     // for backward compat, default position flags are ALT+MSL
-    config.position.position_flags =
-        (meshtastic_Config_PositionConfig_PositionFlags_ALTITUDE | meshtastic_Config_PositionConfig_PositionFlags_ALTITUDE_MSL);
-
+    config.position.position_flags = (meshtastic_Config_PositionConfig_PositionFlags_ALTITUDE | meshtastic_Config_PositionConfig_PositionFlags_ALTITUDE_MSL);
+    
     initConfigIntervals();
 }
 
-void NodeDB::initConfigIntervals()
+void NodeDB::initConfigIntervals() 
 {
     config.position.gps_update_interval = default_gps_update_interval;
     config.position.gps_attempt_time = default_gps_attempt_time;
@@ -201,15 +197,15 @@ void NodeDB::initConfigIntervals()
     config.power.min_wake_secs = default_min_wake_secs;
     config.power.sds_secs = default_sds_secs;
     config.power.wait_bluetooth_secs = default_wait_bluetooth_secs;
-
+    
     config.display.screen_on_secs = default_screen_on_secs;
 }
 
 void NodeDB::installDefaultModuleConfig()
 {
-    LOG_INFO("Installing default ModuleConfig\n");
+    DEBUG_MSG("Installing default ModuleConfig\n");
     memset(&moduleConfig, 0, sizeof(meshtastic_ModuleConfig));
-
+    
     moduleConfig.version = DEVICESTATE_CUR_VER;
     moduleConfig.has_mqtt = true;
     moduleConfig.has_range_test = true;
@@ -226,26 +222,7 @@ void NodeDB::installDefaultModuleConfig()
     initModuleConfigIntervals();
 }
 
-void NodeDB::installRoleDefaults(meshtastic_Config_DeviceConfig_Role role)
-{
-    if (role == meshtastic_Config_DeviceConfig_Role_ROUTER) {
-        initConfigIntervals();
-        initModuleConfigIntervals();
-    } else if (role == meshtastic_Config_DeviceConfig_Role_REPEATER) {
-        config.display.screen_on_secs = 1;
-        meshtastic_Channel &ch = channels.getByIndex(channels.getPrimaryIndex());
-        meshtastic_ChannelSettings &channelSettings = ch.settings;
-        uint8_t defaultpskIndex = 1;
-        channelSettings.psk.bytes[0] = defaultpskIndex;
-        channelSettings.psk.size = 1;
-    } else if (role == meshtastic_Config_DeviceConfig_Role_TRACKER) {
-        config.position.position_broadcast_smart_enabled = false;
-        config.position.position_broadcast_secs = 120;
-        config.position.gps_update_interval = 60;
-    }
-}
-
-void NodeDB::initModuleConfigIntervals()
+void NodeDB::initModuleConfigIntervals() 
 {
     moduleConfig.telemetry.device_update_interval = default_broadcast_interval_secs;
     moduleConfig.telemetry.environment_update_interval = default_broadcast_interval_secs;
@@ -253,7 +230,7 @@ void NodeDB::initModuleConfigIntervals()
 
 void NodeDB::installDefaultChannels()
 {
-    LOG_INFO("Installing default ChannelFile\n");
+    DEBUG_MSG("Installing default ChannelFile\n");
     memset(&channelFile, 0, sizeof(meshtastic_ChannelFile));
     channelFile.version = DEVICESTATE_CUR_VER;
 }
@@ -267,11 +244,11 @@ void NodeDB::resetNodes()
 
 void NodeDB::installDefaultDeviceState()
 {
-    LOG_INFO("Installing default DeviceState\n");
+    DEBUG_MSG("Installing default DeviceState\n");
     memset(&devicestate, 0, sizeof(meshtastic_DeviceState));
 
     *numNodes = 0;
-
+    
     // init our devicestate with valid flags so protobuf writing/reading will work
     devicestate.has_my_node = true;
     devicestate.has_owner = true;
@@ -289,16 +266,16 @@ void NodeDB::installDefaultDeviceState()
 
     // Set default owner name
     pickNewNodeNum(); // based on macaddr now
-    snprintf(owner.long_name, sizeof(owner.long_name), "Meshtastic %02x%02x", ourMacAddr[4], ourMacAddr[5]);
-    snprintf(owner.short_name, sizeof(owner.short_name), "%02x%02x", ourMacAddr[4], ourMacAddr[5]);
+    sprintf(owner.long_name, "Meshtastic %02x%02x", ourMacAddr[4], ourMacAddr[5]);
+    sprintf(owner.short_name, "%02x%02x", ourMacAddr[4], ourMacAddr[5]);
 
-    snprintf(owner.id, sizeof(owner.id), "!%08x", getNodeNum()); // Default node ID now based on nodenum
+    sprintf(owner.id, "!%08x", getNodeNum()); // Default node ID now based on nodenum
     memcpy(owner.macaddr, ourMacAddr, sizeof(owner.macaddr));
 }
 
 void NodeDB::init()
 {
-    LOG_INFO("Initializing NodeDB\n");
+    DEBUG_MSG("Initializing NodeDB\n");
     loadFromDisk();
 
     uint32_t devicestateCRC = crc32Buffer(&devicestate, sizeof(devicestate));
@@ -309,8 +286,7 @@ void NodeDB::init()
 
     myNodeInfo.max_channels = MAX_NUM_CHANNELS; // tell others the max # of channels we can understand
 
-    myNodeInfo.error_code =
-        meshtastic_CriticalErrorCode_NONE; // For the error code, only show values from this boot (discard value from flash)
+    myNodeInfo.error_code = meshtastic_CriticalErrorCode_NONE; // For the error code, only show values from this boot (discard value from flash)
     myNodeInfo.error_address = 0;
 
     // likewise - we always want the app requirements to come from the running appload
@@ -335,7 +311,7 @@ void NodeDB::init()
     preferences.begin("meshtastic", false);
     myNodeInfo.reboot_count = preferences.getUInt("rebootCounter", 0);
     preferences.end();
-    LOG_DEBUG("Number of Device Reboots: %d\n", myNodeInfo.reboot_count);
+    DEBUG_MSG("Number of Device Reboots: %d\n", myNodeInfo.reboot_count);
 
     /* The ESP32 has a wifi radio. This will need to be modified at some point so
      *    the test isn't so simplistic.
@@ -344,7 +320,7 @@ void NodeDB::init()
 #endif
 
     resetRadioConfig(); // If bogus settings got saved, then fix them
-    LOG_DEBUG("region=%d, NODENUM=0x%x, dbsize=%d\n", config.lora.region, myNodeInfo.my_node_num, *numNodes);
+    DEBUG_MSG("region=%d, NODENUM=0x%x, dbsize=%d\n", config.lora.region, myNodeInfo.my_node_num, *numNodes);
 
     if (devicestateCRC != crc32Buffer(&devicestate, sizeof(devicestate)))
         saveWhat |= SEGMENT_DEVICESTATE;
@@ -376,7 +352,7 @@ void NodeDB::pickNewNodeNum()
     meshtastic_NodeInfo *found;
     while ((found = getNode(r)) && memcmp(found->user.macaddr, owner.macaddr, sizeof(owner.macaddr))) {
         NodeNum n = random(NUM_RESERVED, NODENUM_BROADCAST); // try a new random choice
-        LOG_DEBUG("NOTE! Our desired nodenum 0x%x is in use, so trying for 0x%x\n", r, n);
+        DEBUG_MSG("NOTE! Our desired nodenum 0x%x is in use, so trying for 0x%x\n", r, n);
         r = n;
     }
 
@@ -389,8 +365,9 @@ static const char *moduleConfigFileName = "/prefs/module.proto";
 static const char *channelFileName = "/prefs/channels.proto";
 static const char *oemConfigFile = "/oem/oem.proto";
 
+
 /** Load a protobuf from a file, return true for success */
-bool NodeDB::loadProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields, void *dest_struct)
+bool loadProto(const char *filename, size_t protoSize, size_t objSize, const pb_msgdesc_t *fields, void *dest_struct)
 {
     bool okay = false;
 #ifdef FSCom
@@ -399,24 +376,24 @@ bool NodeDB::loadProto(const char *filename, size_t protoSize, size_t objSize, c
     auto f = FSCom.open(filename, FILE_O_READ);
 
     if (f) {
-        LOG_INFO("Loading %s\n", filename);
+        DEBUG_MSG("Loading %s\n", filename);
         pb_istream_t stream = {&readcb, &f, protoSize};
 
-        // LOG_DEBUG("Preload channel name=%s\n", channelSettings.name);
+        // DEBUG_MSG("Preload channel name=%s\n", channelSettings.name);
 
         memset(dest_struct, 0, objSize);
         if (!pb_decode(&stream, fields, dest_struct)) {
-            LOG_ERROR("Error: can't decode protobuf %s\n", PB_GET_ERROR(&stream));
+            DEBUG_MSG("Error: can't decode protobuf %s\n", PB_GET_ERROR(&stream));
         } else {
             okay = true;
         }
 
         f.close();
     } else {
-        LOG_INFO("No %s preferences found\n", filename);
+        DEBUG_MSG("No %s preferences found\n", filename);
     }
 #else
-    LOG_ERROR("ERROR: Filesystem not implemented\n");
+    DEBUG_MSG("ERROR: Filesystem not implemented\n");
 #endif
     return okay;
 }
@@ -424,60 +401,56 @@ bool NodeDB::loadProto(const char *filename, size_t protoSize, size_t objSize, c
 void NodeDB::loadFromDisk()
 {
     // static DeviceState scratch; We no longer read into a tempbuf because this structure is 15KB of valuable RAM
-    if (!loadProto(prefFileName, meshtastic_DeviceState_size, sizeof(meshtastic_DeviceState), &meshtastic_DeviceState_msg,
-                   &devicestate)) {
+    if (!loadProto(prefFileName, meshtastic_DeviceState_size, sizeof(meshtastic_DeviceState), &meshtastic_DeviceState_msg, &devicestate)) {
         installDefaultDeviceState(); // Our in RAM copy might now be corrupt
     } else {
         if (devicestate.version < DEVICESTATE_MIN_VER) {
-            LOG_WARN("Devicestate %d is old, discarding\n", devicestate.version);
+            DEBUG_MSG("Warn: devicestate %d is old, discarding\n", devicestate.version);
             factoryReset();
         } else {
-            LOG_INFO("Loaded saved devicestate version %d\n", devicestate.version);
+            DEBUG_MSG("Loaded saved devicestate version %d\n", devicestate.version);
         }
     }
 
-    if (!loadProto(configFileName, meshtastic_LocalConfig_size, sizeof(meshtastic_LocalConfig), &meshtastic_LocalConfig_msg,
-                   &config)) {
+    if (!loadProto(configFileName, meshtastic_LocalConfig_size, sizeof(meshtastic_LocalConfig), &meshtastic_LocalConfig_msg, &config)) {
         installDefaultConfig(); // Our in RAM copy might now be corrupt
     } else {
         if (config.version < DEVICESTATE_MIN_VER) {
-            LOG_WARN("config %d is old, discarding\n", config.version);
+            DEBUG_MSG("Warn: config %d is old, discarding\n", config.version);
             installDefaultConfig();
         } else {
-            LOG_INFO("Loaded saved config version %d\n", config.version);
+            DEBUG_MSG("Loaded saved config version %d\n", config.version);
         }
     }
 
-    if (!loadProto(moduleConfigFileName, meshtastic_LocalModuleConfig_size, sizeof(meshtastic_LocalModuleConfig),
-                   &meshtastic_LocalModuleConfig_msg, &moduleConfig)) {
+    if (!loadProto(moduleConfigFileName, meshtastic_LocalModuleConfig_size, sizeof(meshtastic_LocalModuleConfig), &meshtastic_LocalModuleConfig_msg, &moduleConfig)) {
         installDefaultModuleConfig(); // Our in RAM copy might now be corrupt
     } else {
         if (moduleConfig.version < DEVICESTATE_MIN_VER) {
-            LOG_WARN("moduleConfig %d is old, discarding\n", moduleConfig.version);
+            DEBUG_MSG("Warn: moduleConfig %d is old, discarding\n", moduleConfig.version);
             installDefaultModuleConfig();
         } else {
-            LOG_INFO("Loaded saved moduleConfig version %d\n", moduleConfig.version);
+            DEBUG_MSG("Loaded saved moduleConfig version %d\n", moduleConfig.version);
         }
     }
 
-    if (!loadProto(channelFileName, meshtastic_ChannelFile_size, sizeof(meshtastic_ChannelFile), &meshtastic_ChannelFile_msg,
-                   &channelFile)) {
+    if (!loadProto(channelFileName, meshtastic_ChannelFile_size, sizeof(meshtastic_ChannelFile), &meshtastic_ChannelFile_msg, &channelFile)) {
         installDefaultChannels(); // Our in RAM copy might now be corrupt
     } else {
         if (channelFile.version < DEVICESTATE_MIN_VER) {
-            LOG_WARN("channelFile %d is old, discarding\n", channelFile.version);
+            DEBUG_MSG("Warn: channelFile %d is old, discarding\n", channelFile.version);
             installDefaultChannels();
         } else {
-            LOG_INFO("Loaded saved channelFile version %d\n", channelFile.version);
+            DEBUG_MSG("Loaded saved channelFile version %d\n", channelFile.version);
         }
     }
 
     if (loadProto(oemConfigFile, meshtastic_OEMStore_size, sizeof(meshtastic_OEMStore), &meshtastic_OEMStore_msg, &oemStore))
-        LOG_INFO("Loaded OEMStore\n");
+        DEBUG_MSG("Loaded OEMStore\n");
 }
 
 /** Save a protobuf from a file, return true for success */
-bool NodeDB::saveProto(const char *filename, size_t protoSize, const pb_msgdesc_t *fields, const void *dest_struct)
+bool saveProto(const char *filename, size_t protoSize, const pb_msgdesc_t *fields, const void *dest_struct)
 {
     bool okay = false;
 #ifdef FSCom
@@ -486,11 +459,11 @@ bool NodeDB::saveProto(const char *filename, size_t protoSize, const pb_msgdesc_
     filenameTmp += ".tmp";
     auto f = FSCom.open(filenameTmp.c_str(), FILE_O_WRITE);
     if (f) {
-        LOG_INFO("Saving %s\n", filename);
+        DEBUG_MSG("Saving %s\n", filename);
         pb_ostream_t stream = {&writecb, &f, protoSize};
 
         if (!pb_encode(&stream, fields, dest_struct)) {
-            LOG_ERROR("Error: can't encode protobuf %s\n", PB_GET_ERROR(&stream));
+            DEBUG_MSG("Error: can't encode protobuf %s\n", PB_GET_ERROR(&stream));
         } else {
             okay = true;
         }
@@ -498,23 +471,23 @@ bool NodeDB::saveProto(const char *filename, size_t protoSize, const pb_msgdesc_
 
         // brief window of risk here ;-)
         if (FSCom.exists(filename) && !FSCom.remove(filename))
-            LOG_WARN("Can't remove old pref file\n");
+            DEBUG_MSG("Warning: Can't remove old pref file\n");
         if (!renameFile(filenameTmp.c_str(), filename))
-            LOG_ERROR("Error: can't rename new pref file\n");
+            DEBUG_MSG("Error: can't rename new pref file\n");
     } else {
-        LOG_ERROR("Can't write prefs\n");
+        DEBUG_MSG("Can't write prefs\n");
 #ifdef ARCH_NRF52
         static uint8_t failedCounter = 0;
         failedCounter++;
-        if (failedCounter >= 2) {
+        if(failedCounter >= 2){
             FSCom.format();
-            // After formatting, the device needs to be restarted
+            //After formatting, the device needs to be restarted
             nodeDB.resetRadioConfig(true);
         }
 #endif
     }
 #else
-    LOG_ERROR("ERROR: Filesystem not implemented\n");
+    DEBUG_MSG("ERROR: Filesystem not implemented\n");
 #endif
     return okay;
 }
@@ -529,7 +502,7 @@ void NodeDB::saveChannelsToDisk()
     }
 }
 
-void NodeDB::saveDeviceStateToDisk()
+void NodeDB::saveDeviceStateToDisk() 
 {
     if (!devicestate.no_save) {
 #ifdef FSCom
@@ -575,7 +548,7 @@ void NodeDB::saveToDisk(int saveWhat)
             saveChannelsToDisk();
         }
     } else {
-        LOG_DEBUG("***** DEVELOPMENT MODE - DO NOT RELEASE - not saving to flash *****\n");
+        DEBUG_MSG("***** DEVELOPMENT MODE - DO NOT RELEASE - not saving to flash *****\n");
     }
 }
 
@@ -593,17 +566,6 @@ uint32_t sinceLastSeen(const meshtastic_NodeInfo *n)
     uint32_t now = getTime();
 
     int delta = (int)(now - n->last_heard);
-    if (delta < 0) // our clock must be slightly off still - not set from GPS yet
-        delta = 0;
-
-    return delta;
-}
-
-uint32_t sinceReceived(const meshtastic_MeshPacket *p)
-{
-    uint32_t now = getTime();
-
-    int delta = (int)(now - p->rx_time);
     if (delta < 0) // our clock must be slightly off still - not set from GPS yet
         delta = 0;
 
@@ -637,21 +599,23 @@ void NodeDB::updatePosition(uint32_t nodeId, const meshtastic_Position &p, RxSou
 
     if (src == RX_SRC_LOCAL) {
         // Local packet, fully authoritative
-        LOG_INFO("updatePosition LOCAL pos@%x, time=%u, latI=%d, lonI=%d, alt=%d\n", p.timestamp, p.time, p.latitude_i,
-                 p.longitude_i, p.altitude);
+        DEBUG_MSG("updatePosition LOCAL pos@%x, time=%u, latI=%d, lonI=%d, alt=%d\n", p.timestamp, p.time, p.latitude_i,
+                  p.longitude_i, p.altitude);
         info->position = p;
+
     } else if ((p.time > 0) && !p.latitude_i && !p.longitude_i && !p.timestamp && !p.location_source) {
         // FIXME SPECIAL TIME SETTING PACKET FROM EUD TO RADIO
         // (stop-gap fix for issue #900)
-        LOG_DEBUG("updatePosition SPECIAL time setting time=%u\n", p.time);
+        DEBUG_MSG("updatePosition SPECIAL time setting time=%u\n", p.time);
         info->position.time = p.time;
+
     } else {
         // Be careful to only update fields that have been set by the REMOTE sender
         // A lot of position reports don't have time populated.  In that case, be careful to not blow away the time we
         // recorded based on the packet rxTime
         //
         // FIXME perhaps handle RX_SRC_USER separately?
-        LOG_INFO("updatePosition REMOTE node=0x%x time=%u, latI=%d, lonI=%d\n", nodeId, p.time, p.latitude_i, p.longitude_i);
+        DEBUG_MSG("updatePosition REMOTE node=0x%x time=%u, latI=%d, lonI=%d\n", nodeId, p.time, p.latitude_i, p.longitude_i);
 
         // First, back up fields that we want to protect from overwrite
         uint32_t tmp_time = info->position.time;
@@ -681,9 +645,9 @@ void NodeDB::updateTelemetry(uint32_t nodeId, const meshtastic_Telemetry &t, RxS
 
     if (src == RX_SRC_LOCAL) {
         // Local packet, fully authoritative
-        LOG_DEBUG("updateTelemetry LOCAL\n");
+        DEBUG_MSG("updateTelemetry LOCAL\n");
     } else {
-        LOG_DEBUG("updateTelemetry REMOTE node=0x%x \n", nodeId);
+        DEBUG_MSG("updateTelemetry REMOTE node=0x%x \n", nodeId);
     }
     info->device_metrics = t.variant.device_metrics;
     info->has_device_metrics = true;
@@ -700,13 +664,13 @@ void NodeDB::updateUser(uint32_t nodeId, const meshtastic_User &p)
         return;
     }
 
-    LOG_DEBUG("old user %s/%s/%s\n", info->user.id, info->user.long_name, info->user.short_name);
+    DEBUG_MSG("old user %s/%s/%s\n", info->user.id, info->user.long_name, info->user.short_name);
 
     bool changed = memcmp(&info->user, &p,
                           sizeof(info->user)); // Both of these blocks start as filled with zero so I think this is okay
 
     info->user = p;
-    LOG_DEBUG("updating changed=%d user %s/%s/%s\n", changed, info->user.id, info->user.long_name, info->user.short_name);
+    DEBUG_MSG("updating changed=%d user %s/%s/%s\n", changed, info->user.id, info->user.long_name, info->user.short_name);
     info->has_user = true;
 
     if (changed) {
@@ -725,7 +689,7 @@ void NodeDB::updateUser(uint32_t nodeId, const meshtastic_User &p)
 void NodeDB::updateFrom(const meshtastic_MeshPacket &mp)
 {
     if (mp.which_payload_variant == meshtastic_MeshPacket_decoded_tag && mp.from) {
-        LOG_DEBUG("Update DB node 0x%x, rx_time=%u\n", mp.from, mp.rx_time);
+        DEBUG_MSG("Update DB node 0x%x, rx_time=%u\n", mp.from, mp.rx_time);
 
         meshtastic_NodeInfo *info = getOrCreateNode(getFrom(&mp));
         if (!info) {
@@ -792,9 +756,9 @@ void recordCriticalError(meshtastic_CriticalErrorCode code, uint32_t address, co
     String lcd = String("Critical error ") + code + "!\n";
     screen->print(lcd.c_str());
     if (filename)
-        LOG_ERROR("NOTE! Recording critical error %d at %s:%lu\n", code, filename, address);
+        DEBUG_MSG("NOTE! Recording critical error %d at %s:%lu\n", code, filename, address);
     else
-        LOG_ERROR("NOTE! Recording critical error %d, address=0x%lx\n", code, address);
+        DEBUG_MSG("NOTE! Recording critical error %d, address=0x%lx\n", code, address);
 
     // Record error to DB
     myNodeInfo.error_code = code;
@@ -803,7 +767,7 @@ void recordCriticalError(meshtastic_CriticalErrorCode code, uint32_t address, co
 
     // Currently portuino is mostly used for simulation.  Make sue the user notices something really bad happend
 #ifdef ARCH_PORTDUINO
-    LOG_ERROR("A critical failure occurred, portduino is exiting...");
+    DEBUG_MSG("A critical failure occurred, portduino is exiting...");
     exit(2);
 #endif
 }

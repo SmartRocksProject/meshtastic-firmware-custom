@@ -4,7 +4,6 @@
 
 #include "concurrency/OSThread.h"
 #include "mesh/Channels.h"
-#include "mesh/generated/meshtastic/mqtt.pb.h"
 #include <PubSubClient.h>
 #if HAS_WIFI
 #include <WiFiClient.h>
@@ -12,8 +11,6 @@
 #if HAS_ETHERNET
 #include <EthernetClient.h>
 #endif
-
-#define MAX_MQTT_QUEUE 16
 
 /**
  * Our wrapper/singleton for sending/receiving MQTT "udp" packets.  This object isolates the MQTT protocol implementation from
@@ -53,12 +50,8 @@ class MQTT : private concurrency::OSThread
     void reconnect();
 
     bool connected();
-
+    
   protected:
-    PointerQueue<meshtastic_ServiceEnvelope> mqttQueue;
-
-    int reconnectCount = 0;
-
     virtual int32_t runOnce() override;
 
   private:
@@ -80,7 +73,7 @@ class MQTT : private concurrency::OSThread
     std::string downstreamPacketToJson(meshtastic_MeshPacket *mp);
 
     /// Return 0 if sleep is okay, veto sleep if we are connected to pubsub server
-    // int preflightSleepCb(void *unused = NULL) { return pubSub.connected() ? 1 : 0; }
+    // int preflightSleepCb(void *unused = NULL) { return pubSub.connected() ? 1 : 0; }    
 };
 
 void mqttInit();

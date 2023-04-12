@@ -29,6 +29,7 @@ class Channels
     int16_t hashes[MAX_NUM_CHANNELS] = {};
 
   public:
+
     Channels() {}
 
     /// Well known channel names
@@ -39,8 +40,8 @@ class Channels
     /** Return the Channel for a specified index */
     meshtastic_Channel &getByIndex(ChannelIndex chIndex);
 
-    /** Return the Channel for a specified name, return primary if not found. */
-    meshtastic_Channel &getByName(const char *chName);
+     /** Return the Channel for a specified name, return primary if not found. */
+    meshtastic_Channel &getByName(const char* chName);
 
     /** Using the index inside the channel, update the specified channel's settings and role.  If this channel is being promoted
      * to be primary, force all other channels to be secondary.

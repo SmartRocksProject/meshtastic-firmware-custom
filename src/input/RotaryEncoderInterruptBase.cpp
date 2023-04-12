@@ -28,7 +28,7 @@ void RotaryEncoderInterruptBase::init(
 
     this->rotaryLevelA = digitalRead(this->_pinA);
     this->rotaryLevelB = digitalRead(this->_pinB);
-    LOG_INFO("Rotary initialized (%d, %d, %d)\n", this->_pinA, this->_pinB, pinPress);
+    DEBUG_MSG("Rotary initialized (%d, %d, %d)\n", this->_pinA, this->_pinB, pinPress);
 }
 
 int32_t RotaryEncoderInterruptBase::runOnce()
@@ -38,13 +38,13 @@ int32_t RotaryEncoderInterruptBase::runOnce()
     e.source = this->_originName;
 
     if (this->action == ROTARY_ACTION_PRESSED) {
-        LOG_DEBUG("Rotary event Press\n");
+        DEBUG_MSG("Rotary event Press\n");
         e.inputEvent = this->_eventPressed;
     } else if (this->action == ROTARY_ACTION_CW) {
-        LOG_DEBUG("Rotary event CW\n");
+        DEBUG_MSG("Rotary event CW\n");
         e.inputEvent = this->_eventCw;
     } else if (this->action == ROTARY_ACTION_CCW) {
-        LOG_DEBUG("Rotary event CCW\n");
+        DEBUG_MSG("Rotary event CCW\n");
         e.inputEvent = this->_eventCcw;
     }
 
@@ -54,7 +54,7 @@ int32_t RotaryEncoderInterruptBase::runOnce()
 
     this->action = ROTARY_ACTION_NONE;
 
-    return INT32_MAX;
+    return 30000; // TODO: technically this can be MAX_INT
 }
 
 void RotaryEncoderInterruptBase::intPressHandler()
@@ -104,7 +104,7 @@ RotaryEncoderInterruptBaseStateType RotaryEncoderInterruptBase::intHandler(bool 
             newState = ROTARY_EVENT_OCCURRED;
             if ((this->action != ROTARY_ACTION_PRESSED) && (this->action != action)) {
                 this->action = action;
-                LOG_DEBUG("Rotary action\n");
+                DEBUG_MSG("Rotary action\n");
             }
         }
     } else if (!actualPinRaising && (otherPinLevel == HIGH)) {

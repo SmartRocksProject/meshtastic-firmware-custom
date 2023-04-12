@@ -2,7 +2,9 @@
 
 #include "MeshTypes.h"
 
+#include <assert.h>
 #include <queue>
+
 
 /**
  * A priority queue of packets
@@ -12,8 +14,7 @@ class MeshPacketQueue
     size_t maxLen;
     std::vector<meshtastic_MeshPacket *> queue;
 
-    /** Replace a lower priority package in the queue with 'mp' (provided there are lower pri packages). Return true if replaced.
-     */
+    /** Replace a lower priority package in the queue with 'mp' (provided there are lower pri packages). Return true if replaced. */
     bool replaceLowerPriorityPacket(meshtastic_MeshPacket *mp);
 
   public:
@@ -24,12 +25,6 @@ class MeshPacketQueue
 
     /** return true if the queue is empty */
     bool empty();
-
-    /** return amount of free packets in Queue */
-    size_t getFree() { return maxLen - queue.size(); }
-
-    /** return total size of the Queue */
-    size_t getMaxLen() { return maxLen; }
 
     meshtastic_MeshPacket *dequeue();
 

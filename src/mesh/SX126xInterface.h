@@ -6,7 +6,8 @@
  * \brief Adapter for SX126x radio family. Implements common logic for child classes.
  * \tparam T RadioLib module type for SX126x: SX1262, SX1268.
  */
-template <class T> class SX126xInterface : public RadioLibInterface
+template<class T>
+class SX126xInterface : public RadioLibInterface
 {
   public:
     SX126xInterface(RADIOLIB_PIN_TYPE cs, RADIOLIB_PIN_TYPE irq, RADIOLIB_PIN_TYPE rst, RADIOLIB_PIN_TYPE busy, SPIClass &spi);
@@ -27,10 +28,11 @@ template <class T> class SX126xInterface : public RadioLibInterface
     bool isIRQPending() override { return lora.getIrqStatus() != 0; }
 
   protected:
+
     float currentLimit = 140; // Higher OCP limit for SX126x PA
 
     /**
-     * Specific module instance
+     * Specific module instance 
      */
     T lora;
 

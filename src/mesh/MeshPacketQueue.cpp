@@ -1,6 +1,5 @@
-#include "MeshPacketQueue.h"
 #include "configuration.h"
-#include <assert.h>
+#include "MeshPacketQueue.h"
 
 #include <algorithm>
 
@@ -26,8 +25,7 @@ bool CompareMeshPacketFunc(const meshtastic_MeshPacket *p1, const meshtastic_Mes
 
 MeshPacketQueue::MeshPacketQueue(size_t _maxLen) : maxLen(_maxLen) {}
 
-bool MeshPacketQueue::empty()
-{
+bool MeshPacketQueue::empty() {
     return queue.empty();
 }
 
@@ -41,9 +39,8 @@ void fixPriority(meshtastic_MeshPacket *p)
     if (p->priority == meshtastic_MeshPacket_Priority_UNSET) {
         // if acks give high priority
         // if a reliable message give a bit higher default priority
-        p->priority = (p->decoded.portnum == meshtastic_PortNum_ROUTING_APP)
-                          ? meshtastic_MeshPacket_Priority_ACK
-                          : (p->want_ack ? meshtastic_MeshPacket_Priority_RELIABLE : meshtastic_MeshPacket_Priority_DEFAULT);
+        p->priority = (p->decoded.portnum == meshtastic_PortNum_ROUTING_APP) ? meshtastic_MeshPacket_Priority_ACK :
+                          (p->want_ack ? meshtastic_MeshPacket_Priority_RELIABLE : meshtastic_MeshPacket_Priority_DEFAULT);
     }
 }
 
@@ -101,8 +98,7 @@ meshtastic_MeshPacket *MeshPacketQueue::remove(NodeNum from, PacketId id)
 }
 
 /** Attempt to find and remove a packet from this queue.  Returns the packet which was removed from the queue */
-bool MeshPacketQueue::replaceLowerPriorityPacket(meshtastic_MeshPacket *p)
-{
+bool MeshPacketQueue::replaceLowerPriorityPacket(meshtastic_MeshPacket *p) {
     std::sort_heap(queue.begin(), queue.end(), &CompareMeshPacketFunc); // sort ascending based on priority (0 -> 127)
 
     // find first packet which does not compare less (in priority) than parameter packet
@@ -122,7 +118,7 @@ bool MeshPacketQueue::replaceLowerPriorityPacket(meshtastic_MeshPacket *p)
 
     if (getPriority(p) > getPriority(*low)) {
         packetPool.release(*low); // deallocate and drop the packet we're replacing
-        *low = p;                 // replace low-pri packet at this position with incoming packet with higher priority
+        *low = p; // replace low-pri packet at this position with incoming packet with higher priority
     }
 
     std::make_heap(queue.begin(), queue.end(), &CompareMeshPacketFunc);

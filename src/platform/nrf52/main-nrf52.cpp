@@ -1,15 +1,16 @@
 #include "configuration.h"
-#include <Adafruit_nRFCrypto.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <assert.h>
 #include <ble_gap.h>
 #include <memory.h>
 #include <stdio.h>
+#include <Adafruit_nRFCrypto.h>
 // #include <Adafruit_USBD_Device.h>
 #include "NodeDB.h"
+
+#include "NRF52Bluetooth.h"
 #include "error.h"
-#include "main.h"
 
 #ifdef BQ25703A_ADDR
 #include "BQ25713.h"
@@ -21,8 +22,7 @@ static inline void debugger_break(void)
                    "mov pc, lr\n\t");
 }
 
-bool loopCanSleep()
-{
+bool loopCanSleep() {
     // turn off sleep only while connected via USB
     // return true;
     return !Serial; // the bool operator on the nrf52 serial class returns true if connected to a PC currently
@@ -32,7 +32,7 @@ bool loopCanSleep()
 // handle standard gcc assert failures
 void __attribute__((noreturn)) __assert_func(const char *file, int line, const char *func, const char *failedexpr)
 {
-    LOG_ERROR("assert failed %s: %d, %s, test=%s\n", file, line, func, failedexpr);
+    DEBUG_MSG("assert failed %s: %d, %s, test=%s\n", file, line, func, failedexpr);
     // debugger_break(); FIXME doesn't work, possibly not for segger
     // Reboot cpu
     NVIC_SystemReset();
@@ -62,6 +62,8 @@ static void initBrownout()
     // We don't bother with setting up brownout if soft device is disabled - because during production we always use softdevice
 }
 
+NRF52Bluetooth *nrf52Bluetooth;
+
 static bool bleOn = false;
 static const bool useSoftDevice = true; // Set to false for easier debugging
 
@@ -71,11 +73,11 @@ void setBluetoothEnable(bool on)
         if (on) {
             if (!nrf52Bluetooth) {
                 if (!useSoftDevice)
-                    LOG_INFO("DISABLING NRF52 BLUETOOTH WHILE DEBUGGING\n");
+                    DEBUG_MSG("DISABLING NRF52 BLUETOOTH WHILE DEBUGGING\n");
                 else {
                     nrf52Bluetooth = new NRF52Bluetooth();
                     nrf52Bluetooth->setup();
-
+                    
                     // We delay brownout init until after BLE because BLE starts soft device
                     initBrownout();
                 }
@@ -106,17 +108,17 @@ void checkSDEvents()
         while (NRF_SUCCESS == sd_evt_get(&evt)) {
             switch (evt) {
             case NRF_EVT_POWER_FAILURE_WARNING:
-                RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_BROWNOUT);
+                RECORD_CRITICALERROR(CriticalErrorCode_BROWNOUT);
                 break;
 
             default:
-                LOG_DEBUG("Unexpected SDevt %d\n", evt);
+                DEBUG_MSG("Unexpected SDevt %d\n", evt);
                 break;
             }
         }
     } else {
         if (NRF_POWER->EVENTS_POFWARN)
-            RECORD_CRITICALERROR(meshtastic_CriticalErrorCode_BROWNOUT);
+            RECORD_CRITICALERROR(CriticalErrorCode_BROWNOUT);
     }
 }
 
@@ -130,7 +132,7 @@ void nrf52Setup()
     auto why = NRF_POWER->RESETREAS;
     // per
     // https://infocenter.nordicsemi.com/index.jsp?topic=%2Fcom.nordic.infocenter.nrf52832.ps.v1.1%2Fpower.html
-    LOG_DEBUG("Reset reason: 0x%x\n", why);
+    DEBUG_MSG("Reset reason: 0x%x\n", why);
 
     // Per
     // https://devzone.nordicsemi.com/nordic/nordic-blog/b/blog/posts/monitor-mode-debugging-with-j-link-and-gdbeclipse
@@ -140,17 +142,17 @@ void nrf52Setup()
 #ifdef BQ25703A_ADDR
     auto *bq = new BQ25713();
     if (!bq->setup())
-        LOG_ERROR("ERROR! Charge controller init failed\n");
+        DEBUG_MSG("ERROR! Charge controller init failed\n");
 #endif
 
     // Init random seed
     union seedParts {
         uint32_t seed32;
-        uint8_t seed8[4];
+        uint8_t  seed8[4];
     } seed;
     nRFCrypto.begin();
     nRFCrypto.Random.generate(seed.seed8, sizeof(seed.seed8));
-    LOG_DEBUG("Setting random seed %u\n", seed.seed32);
+    DEBUG_MSG("Setting random seed %u\n", seed.seed32);
     randomSeed(seed.seed32);
     nRFCrypto.end();
 }
@@ -170,28 +172,25 @@ void cpuDeepSleep(uint64_t msecToWake)
     Serial1.end();
 #endif
     setBluetoothEnable(false);
-#ifdef RAK4630
-    digitalWrite(PIN_3V3_EN, LOW);
-#endif
     // FIXME, use system off mode with ram retention for key state?
     // FIXME, use non-init RAM per
     // https://devzone.nordicsemi.com/f/nordic-q-a/48919/ram-retention-settings-with-softdevice-enabled
 
     auto ok = sd_power_system_off();
     if (ok != NRF_SUCCESS) {
-        LOG_ERROR("FIXME: Ignoring soft device (EasyDMA pending?) and forcing system-off!\n");
+        DEBUG_MSG("FIXME: Ignoring soft device (EasyDMA pending?) and forcing "
+                  "system-off!\n");
         NRF_POWER->SYSTEMOFF = 1;
     }
 
     // The following code should not be run, because we are off
     while (1) {
         delay(5000);
-        LOG_DEBUG(".");
+        DEBUG_MSG(".");
     }
 }
 
-void clearBonds()
-{
+void clearBonds() {
     if (!nrf52Bluetooth) {
         nrf52Bluetooth = new NRF52Bluetooth();
         nrf52Bluetooth->setup();

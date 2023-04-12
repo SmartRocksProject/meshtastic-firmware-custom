@@ -4,6 +4,7 @@
 #include "MeshService.h"
 #include "NodeDB.h"
 #include "Router.h"
+#include "assert.h"
 #include "configuration.h"
 #include "main.h"
 #include "sleep.h"
@@ -11,10 +12,10 @@
 #include <pb_decode.h>
 #include <pb_encode.h>
 
-#define RDEF(name, freq_start, freq_end, duty_cycle, spacing, power_limit, audio_permitted, frequency_switching, wide_lora)      \
+#define RDEF(name, freq_start, freq_end, duty_cycle, spacing, power_limit, audio_permitted, frequency_switching, wide_lora)                 \
     {                                                                                                                            \
-        meshtastic_Config_LoRaConfig_RegionCode_##name, freq_start, freq_end, duty_cycle, spacing, power_limit, audio_permitted, \
-            frequency_switching, wide_lora, #name                                                                                \
+        meshtastic_Config_LoRaConfig_RegionCode_##name, freq_start, freq_end, duty_cycle, spacing, power_limit, audio_permitted,            \
+            frequency_switching, wide_lora, #name                                                                                           \
     }
 
 const RegionInfo regions[] = {
@@ -38,9 +39,9 @@ const RegionInfo regions[] = {
 
         Special Note:
         The link above describes LoRaWAN's band plan, stating a power limit of 16 dBm. This is their own suggested specification,
-        we do not need to follow it. The European Union regulations clearly state that the power limit for this frequency range is
-       500 mW, or 27 dBm. It also states that we can use interference avoidance and spectrum access techniques to avoid a duty
-       cycle. (Please refer to section 4.21 in the following document)
+        we do not need to follow it. The European Union regulations clearly state that the power limit for this frequency range is 500 mW, or 27 dBm.
+        It also states that we can use interference avoidance and spectrum access techniques to avoid a duty cycle.
+        (Please refer to section 4.21 in the following document)
         https://ec.europa.eu/growth/tools-databases/tris/index.cfm/ro/search/?trisaction=search.detail&year=2021&num=528&dLang=EN
      */
     RDEF(EU_868, 869.4f, 869.65f, 10, 0, 27, false, false, false),
@@ -96,18 +97,6 @@ const RegionInfo regions[] = {
     RDEF(TH, 920.0f, 925.0f, 100, 0, 16, true, false, false),
 
     /*
-        433,05-434,7 Mhz 10 mW
-        https://nkrzi.gov.ua/images/upload/256/5810/PDF_UUZ_19_01_2016.pdf
-    */
-    RDEF(UA_433, 433.0f, 434.7f, 10, 0, 10, true, false, false),
-
-    /*
-        868,0-868,6 Mhz 25 mW
-        https://nkrzi.gov.ua/images/upload/256/5810/PDF_UUZ_19_01_2016.pdf
-    */
-    RDEF(UA_868, 868.0f, 868.6f, 1, 0, 14, true, false, false),
-
-    /*
        2.4 GHZ WLAN Band equivalent. Only for SX128x chips.
     */
 
@@ -122,15 +111,13 @@ const RegionInfo regions[] = {
 
 const RegionInfo *myRegion;
 
-static uint8_t bytes[MAX_RHPACKETLEN];
-
 void initRegion()
 {
     const RegionInfo *r = regions;
     for (; r->code != meshtastic_Config_LoRaConfig_RegionCode_UNSET && r->code != config.lora.region; r++)
         ;
     myRegion = r;
-    LOG_INFO("Wanted region %d, using %s\n", config.lora.region, r->name);
+    DEBUG_MSG("Wanted region %d, using %s\n", config.lora.region, r->name);
 }
 
 /**
@@ -170,34 +157,32 @@ uint32_t RadioInterface::getPacketTime(uint32_t pl)
 
     uint32_t msecs = tPacket * 1000;
 
-    LOG_DEBUG("(bw=%d, sf=%d, cr=4/%d) packet symLen=%d ms, payloadSize=%u, time %d ms\n", (int)bw, sf, cr, (int)(tSym * 1000),
+    DEBUG_MSG("(bw=%d, sf=%d, cr=4/%d) packet symLen=%d ms, payloadSize=%u, time %d ms\n", (int)bw, sf, cr, (int)(tSym * 1000),
               pl, msecs);
     return msecs;
 }
 
 uint32_t RadioInterface::getPacketTime(meshtastic_MeshPacket *p)
 {
-    uint32_t pl = 0;
-    if (p->which_payload_variant == meshtastic_MeshPacket_encrypted_tag) {
-        pl = p->encrypted.size + sizeof(PacketHeader);
-    } else {
-        size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), &meshtastic_Data_msg, &p->decoded);
-        pl = numbytes + sizeof(PacketHeader);
-    }
+    assert(p->which_payload_variant == meshtastic_MeshPacket_encrypted_tag); // It should have already been encoded by now
+    uint32_t pl = p->encrypted.size + sizeof(PacketHeader);
+
     return getPacketTime(pl);
 }
 
 /** The delay to use for retransmitting dropped packets */
 uint32_t RadioInterface::getRetransmissionMsec(const meshtastic_MeshPacket *p)
 {
+    assert(slotTimeMsec); // Better be non zero
+    static uint8_t bytes[MAX_RHPACKETLEN];
     size_t numbytes = pb_encode_to_bytes(bytes, sizeof(bytes), &meshtastic_Data_msg, &p->decoded);
     uint32_t packetAirtime = getPacketTime(numbytes + sizeof(PacketHeader));
     // Make sure enough time has elapsed for this packet to be sent and an ACK is received.
-    // LOG_DEBUG("Waiting for flooding message with airtime %d and slotTime is %d\n", packetAirtime, slotTimeMsec);
+    // DEBUG_MSG("Waiting for flooding message with airtime %d and slotTime is %d\n", packetAirtime, slotTimeMsec);
     float channelUtil = airTime->channelUtilizationPercent();
     uint8_t CWsize = map(channelUtil, 0, 100, CWmin, CWmax);
     // Assuming we pick max. of CWsize and there will be a receiver with SNR at half the range
-    return 2 * packetAirtime + (pow(2, CWsize) + pow(2, int((CWmax + CWmin) / 2))) * slotTimeMsec + PROCESSING_TIME_MSEC;
+    return 2*packetAirtime + (pow(2, CWsize) + pow(2, int((CWmax+CWmin)/2))) * slotTimeMsec + PROCESSING_TIME_MSEC;
 }
 
 /** The delay to use when we want to send something */
@@ -208,7 +193,7 @@ uint32_t RadioInterface::getTxDelayMsec()
     current channel utilization. */
     float channelUtil = airTime->channelUtilizationPercent();
     uint8_t CWsize = map(channelUtil, 0, 100, CWmin, CWmax);
-    // LOG_DEBUG("Current channel utilization is %f so setting CWsize to %d\n", channelUtil, CWsize);
+    // DEBUG_MSG("Current channel utilization is %f so setting CWsize to %d\n", channelUtil, CWsize);
     return random(0, pow(2, CWsize)) * slotTimeMsec;
 }
 
@@ -225,15 +210,14 @@ uint32_t RadioInterface::getTxDelayMsecWeighted(float snr)
     //  low SNR = small CW size (Short Delay)
     uint32_t delay = 0;
     uint8_t CWsize = map(snr, SNR_MIN, SNR_MAX, CWmin, CWmax);
-    // LOG_DEBUG("rx_snr of %f so setting CWsize to:%d\n", snr, CWsize);
+    // DEBUG_MSG("rx_snr of %f so setting CWsize to:%d\n", snr, CWsize);
     if (config.device.role == meshtastic_Config_DeviceConfig_Role_ROUTER ||
-        config.device.role == meshtastic_Config_DeviceConfig_Role_ROUTER_CLIENT ||
-        config.device.role == meshtastic_Config_DeviceConfig_Role_REPEATER) {
-        delay = random(0, 2 * CWsize) * slotTimeMsec;
-        LOG_DEBUG("rx_snr found in packet. As a router, setting tx delay:%d\n", delay);
+        config.device.role == meshtastic_Config_DeviceConfig_Role_ROUTER_CLIENT) {
+        delay = random(0, 2*CWsize) * slotTimeMsec;
+        DEBUG_MSG("rx_snr found in packet. As a router, setting tx delay:%d\n", delay);
     } else {
         delay = random(0, pow(2, CWsize)) * slotTimeMsec;
-        LOG_DEBUG("rx_snr found in packet. Setting tx delay:%d\n", delay);
+        DEBUG_MSG("rx_snr found in packet. Setting tx delay:%d\n", delay);
     }
 
     return delay;
@@ -241,53 +225,55 @@ uint32_t RadioInterface::getTxDelayMsecWeighted(float snr)
 
 void printPacket(const char *prefix, const meshtastic_MeshPacket *p)
 {
-    std::string out = DEBUG_PORT.mt_sprintf("%s (id=0x%08x fr=0x%02x to=0x%02x, WantAck=%d, HopLim=%d Ch=0x%x", prefix, p->id,
-                                            p->from & 0xff, p->to & 0xff, p->want_ack, p->hop_limit, p->channel);
+    DEBUG_MSG("%s (id=0x%08x fr=0x%02x to=0x%02x, WantAck=%d, HopLim=%d Ch=0x%x", prefix, p->id, p->from & 0xff, p->to & 0xff,
+              p->want_ack, p->hop_limit, p->channel);
     if (p->which_payload_variant == meshtastic_MeshPacket_decoded_tag) {
         auto &s = p->decoded;
 
-        out += DEBUG_PORT.mt_sprintf(" Portnum=%d", s.portnum);
+        DEBUG_MSG(" Portnum=%d", s.portnum);
 
         if (s.want_response)
-            out += DEBUG_PORT.mt_sprintf(" WANTRESP");
+            DEBUG_MSG(" WANTRESP");
 
         if (s.source != 0)
-            out += DEBUG_PORT.mt_sprintf(" source=%08x", s.source);
+            DEBUG_MSG(" source=%08x", s.source);
 
         if (s.dest != 0)
-            out += DEBUG_PORT.mt_sprintf(" dest=%08x", s.dest);
+            DEBUG_MSG(" dest=%08x", s.dest);
 
         if (s.request_id)
-            out += DEBUG_PORT.mt_sprintf(" requestId=%0x", s.request_id);
+            DEBUG_MSG(" requestId=%0x", s.request_id);
 
         /* now inside Data and therefore kinda opaque
         if (s.which_ackVariant == SubPacket_success_id_tag)
-            out += DEBUG_PORT.mt_sprintf(" successId=%08x", s.ackVariant.success_id);
+            DEBUG_MSG(" successId=%08x", s.ackVariant.success_id);
         else if (s.which_ackVariant == SubPacket_fail_id_tag)
-            out += DEBUG_PORT.mt_sprintf(" failId=%08x", s.ackVariant.fail_id); */
+            DEBUG_MSG(" failId=%08x", s.ackVariant.fail_id); */
     } else {
-        out += " encrypted";
+        DEBUG_MSG(" encrypted");
     }
 
     if (p->rx_time != 0) {
-        out += DEBUG_PORT.mt_sprintf(" rxtime=%u", p->rx_time);
+        DEBUG_MSG(" rxtime=%u", p->rx_time);
     }
     if (p->rx_snr != 0.0) {
-        out += DEBUG_PORT.mt_sprintf(" rxSNR=%g", p->rx_snr);
+        DEBUG_MSG(" rxSNR=%g", p->rx_snr);
     }
     if (p->rx_rssi != 0) {
-        out += DEBUG_PORT.mt_sprintf(" rxRSSI=%i", p->rx_rssi);
+        DEBUG_MSG(" rxRSSI=%g", p->rx_rssi);
     }
     if (p->priority != 0)
-        out += DEBUG_PORT.mt_sprintf(" priority=%d", p->priority);
+        DEBUG_MSG(" priority=%d", p->priority);
 
-    out + ")\n";
-    LOG_DEBUG("%s", out.c_str());
+    DEBUG_MSG(")\n");
 }
 
 RadioInterface::RadioInterface()
 {
     assert(sizeof(PacketHeader) == 16); // make sure the compiler did what we expected
+
+    // Can't print strings this early - serial not setup yet
+    // DEBUG_MSG("Set meshradio defaults name=%s\n", channelSettings.name);
 }
 
 bool RadioInterface::reconfigure()
@@ -298,7 +284,7 @@ bool RadioInterface::reconfigure()
 
 bool RadioInterface::init()
 {
-    LOG_INFO("Starting meshradio init...\n");
+    DEBUG_MSG("Starting meshradio init...\n");
 
     configChangedObserver.observe(&service.configChanged);
     preflightSleepObserver.observe(&preflightSleep);
@@ -398,13 +384,8 @@ void RadioInterface::applyModemConfig()
             cr = 8;
             sf = 10;
             break;
-        default: // Config_LoRaConfig_ModemPreset_LONG_FAST is default. Gracefully use this is preset is something illegal.
+        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_FAST:
             bw = (myRegion->wideLora) ? 812.5 : 250;
-            cr = 8;
-            sf = 11;
-            break;
-        case meshtastic_Config_LoRaConfig_ModemPreset_LONG_MODERATE:
-            bw = (myRegion->wideLora) ? 406.25 : 125;
             cr = 8;
             sf = 11;
             break;
@@ -414,10 +395,12 @@ void RadioInterface::applyModemConfig()
             sf = 12;
             break;
         case meshtastic_Config_LoRaConfig_ModemPreset_VERY_LONG_SLOW:
-            bw = (myRegion->wideLora) ? 203.125 : 62.5;
+            bw = (myRegion->wideLora) ? 203.125 : 31.25;
             cr = 8;
             sf = 12;
             break;
+        default:
+            assert(0); // Unknown enum
         }
     } else {
         sf = loraConfig.spread_factor;
@@ -439,6 +422,7 @@ void RadioInterface::applyModemConfig()
     }
 
     power = loraConfig.tx_power;
+    assert(myRegion); // Should have been found in init
 
     if ((power == 0) || ((power > myRegion->powerLimit) && !devicestate.owner.is_licensed))
         power = myRegion->powerLimit;
@@ -460,26 +444,18 @@ void RadioInterface::applyModemConfig()
     // float freq = myRegion->freqStart + ((((myRegion->freqEnd - myRegion->freqStart) / numChannels) / 2) * channel_num);
 
     // New frequency selection formula
-    float freq = myRegion->freqStart + (bw / 2000) + (channel_num * (bw / 1000));
-
-    // override if we have a verbatim frequency
-    if (loraConfig.override_frequency) {
-        freq = loraConfig.override_frequency;
-        channel_num = -1;
-    }
+    float freq = myRegion->freqStart + (bw / 2000) + ( channel_num * (bw / 1000));
 
     saveChannelNum(channel_num);
-    saveFreq(freq + loraConfig.frequency_offset);
+    saveFreq(freq + config.lora.frequency_offset);
 
-    LOG_INFO("Radio freq=%.3f, config.lora.frequency_offset=%.3f\n", freq, loraConfig.frequency_offset);
-    LOG_INFO("Set radio: region=%s, name=%s, config=%u, ch=%d, power=%d\n", myRegion->name, channelName, loraConfig.modem_preset,
-             channel_num, power);
-    LOG_INFO("Radio myRegion->freqStart -> myRegion->freqEnd: %f -> %f (%f mhz)\n", myRegion->freqStart, myRegion->freqEnd,
-             myRegion->freqEnd - myRegion->freqStart);
-    LOG_INFO("Radio myRegion->numChannels: %d x %.3fkHz\n", numChannels, bw);
-    LOG_INFO("Radio channel_num: %d\n", channel_num);
-    LOG_INFO("Radio frequency: %f\n", getFreq());
-    LOG_INFO("Slot time: %u msec\n", slotTimeMsec);
+    DEBUG_MSG("Radio freq=%.3f, config.lora.frequency_offset=%.3f\n", freq, config.lora.frequency_offset);
+    DEBUG_MSG("Set radio: region=%s, name=%s, config=%u, ch=%d, power=%d\n", myRegion->name, channelName, loraConfig.modem_preset, channel_num, power);
+    DEBUG_MSG("Radio myRegion->freqStart -> myRegion->freqEnd: %f -> %f (%f mhz)\n", myRegion->freqStart, myRegion->freqEnd, myRegion->freqEnd - myRegion->freqStart);
+    DEBUG_MSG("Radio myRegion->numChannels: %d x %.3fkHz\n", numChannels, bw);
+    DEBUG_MSG("Radio channel_num: %d\n", channel_num);
+    DEBUG_MSG("Radio frequency: %f\n", getFreq());
+    DEBUG_MSG("Slot time: %u msec\n", slotTimeMsec);
 }
 
 /**
@@ -494,12 +470,13 @@ void RadioInterface::limitPower()
         maxPower = myRegion->powerLimit;
 
     if ((power > maxPower) && !devicestate.owner.is_licensed) {
-        LOG_INFO("Lowering transmit power because of regulatory limits\n");
+        DEBUG_MSG("Lowering transmit power because of regulatory limits\n");
         power = maxPower;
     }
 
-    LOG_INFO("Set radio: final power level=%d\n", power);
+    DEBUG_MSG("Set radio: final power level=%d\n", power);
 }
+
 
 void RadioInterface::deliverToReceiver(meshtastic_MeshPacket *p)
 {
@@ -514,7 +491,7 @@ size_t RadioInterface::beginSending(meshtastic_MeshPacket *p)
 {
     assert(!sendingPacket);
 
-    // LOG_DEBUG("sending queued packet on mesh (txGood=%d,rxGood=%d,rxBad=%d)\n", rf95.txGood(), rf95.rxGood(), rf95.rxBad());
+    // DEBUG_MSG("sending queued packet on mesh (txGood=%d,rxGood=%d,rxBad=%d)\n", rf95.txGood(), rf95.rxGood(), rf95.rxBad());
     assert(p->which_payload_variant == meshtastic_MeshPacket_encrypted_tag); // It should have already been encoded by now
 
     lastTxStart = millis();
@@ -525,10 +502,7 @@ size_t RadioInterface::beginSending(meshtastic_MeshPacket *p)
     h->to = p->to;
     h->id = p->id;
     h->channel = p->channel;
-    if (p->hop_limit > HOP_MAX) {
-        LOG_WARN("hop limit %d is too high, setting to %d\n", p->hop_limit, HOP_MAX);
-        p->hop_limit = HOP_MAX;
-    }
+    assert(p->hop_limit <= HOP_MAX);
     h->flags = p->hop_limit | (p->want_ack ? PACKET_FLAGS_WANT_ACK_MASK : 0);
 
     // if the sender nodenum is zero, that means uninitialized

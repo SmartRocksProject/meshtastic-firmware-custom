@@ -1,14 +1,16 @@
-#include "INA219Sensor.h"
 #include "../mesh/generated/meshtastic/telemetry.pb.h"
-#include "TelemetrySensor.h"
 #include "configuration.h"
+#include "TelemetrySensor.h"
+#include "INA219Sensor.h"
 #include <Adafruit_INA219.h>
 
-INA219Sensor::INA219Sensor() : TelemetrySensor(meshtastic_TelemetrySensorType_INA219, "INA219") {}
-
-int32_t INA219Sensor::runOnce()
+INA219Sensor::INA219Sensor() : 
+    TelemetrySensor(meshtastic_TelemetrySensorType_INA219, "INA219") 
 {
-    LOG_INFO("Init sensor: %s\n", sensorName);
+}
+
+int32_t INA219Sensor::runOnce() {
+    DEBUG_MSG("Init sensor: %s\n", sensorName);
     if (!hasSensor()) {
         return DEFAULT_SENSOR_MINIMUM_WAIT_TIME_BETWEEN_READS;
     }
@@ -17,11 +19,12 @@ int32_t INA219Sensor::runOnce()
     return initI2CSensor();
 }
 
-void INA219Sensor::setup() {}
-
-bool INA219Sensor::getMetrics(meshtastic_Telemetry *measurement)
+void INA219Sensor::setup() 
 {
+}
+
+bool INA219Sensor::getMetrics(meshtastic_Telemetry *measurement) {
     measurement->variant.environment_metrics.voltage = ina219.getBusVoltage_V();
     measurement->variant.environment_metrics.current = ina219.getCurrent_mA();
     return true;
-}
+}    

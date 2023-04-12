@@ -3,12 +3,16 @@
 
 CardKbI2cImpl *cardKbI2cImpl;
 
-CardKbI2cImpl::CardKbI2cImpl() : KbI2cBase("cardKB") {}
+CardKbI2cImpl::CardKbI2cImpl() :
+    KbI2cBase("cardKB")
+{
+}
 
 void CardKbI2cImpl::init()
 {
-    if (cardkb_found != CARDKB_ADDR) {
-        disable();
+    if (cardkb_found != CARDKB_ADDR)
+    {
+        // Input device is not detected.
         return;
     }
 

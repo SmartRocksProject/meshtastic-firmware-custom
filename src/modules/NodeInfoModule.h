@@ -8,15 +8,14 @@ class NodeInfoModule : public ProtobufModule<meshtastic_User>, private concurren
 {
     /// The id of the last packet we sent, to allow us to cancel it if we make something fresher
     PacketId prevPacketId = 0;
-
+    
     uint32_t currentGeneration = 0;
-
   public:
     /** Constructor
      * name is for debugging output
      */
     NodeInfoModule();
-
+    
     /**
      * Send our NodeInfo into the mesh
      */

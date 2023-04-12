@@ -10,8 +10,7 @@
 PositionModule *positionModule;
 
 PositionModule::PositionModule()
-    : ProtobufModule("position", meshtastic_PortNum_POSITION_APP, &meshtastic_Position_msg), concurrency::OSThread(
-                                                                                                 "PositionModule")
+    : ProtobufModule("position", meshtastic_PortNum_POSITION_APP, &meshtastic_Position_msg), concurrency::OSThread("PositionModule")
 {
     isPromiscuous = true;          // We always want to update our nodedb, even if we are sniffing on others
     setIntervalFromNow(60 * 1000); // Send our initial position 60 seconds after we start (to give GPS time to setup)
@@ -27,17 +26,17 @@ bool PositionModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, mes
     // FIXME this can in fact happen with packets sent from EUD (src=RX_SRC_USER)
     // to set fixed location, EUD-GPS location or just the time (see also issue #900)
     if (nodeDB.getNodeNum() == getFrom(&mp)) {
-        LOG_DEBUG("Incoming update from MYSELF\n");
-        // LOG_DEBUG("Ignored an incoming update from MYSELF\n");
+        DEBUG_MSG("Incoming update from MYSELF\n");
+        // DEBUG_MSG("Ignored an incoming update from MYSELF\n");
         // return false;
     }
 
     // Log packet size and list of fields
-    LOG_INFO("POSITION node=%08x l=%d %s%s%s%s%s%s%s%s%s%s%s%s%s\n", getFrom(&mp), mp.decoded.payload.size,
-             p.latitude_i ? "LAT " : "", p.longitude_i ? "LON " : "", p.altitude ? "MSL " : "", p.altitude_hae ? "HAE " : "",
-             p.altitude_geoidal_separation ? "GEO " : "", p.PDOP ? "PDOP " : "", p.HDOP ? "HDOP " : "", p.VDOP ? "VDOP " : "",
-             p.sats_in_view ? "SIV " : "", p.fix_quality ? "FXQ " : "", p.fix_type ? "FXT " : "", p.timestamp ? "PTS " : "",
-             p.time ? "TIME " : "");
+    DEBUG_MSG("POSITION node=%08x l=%d %s%s%s%s%s%s%s%s%s%s%s%s%s\n", getFrom(&mp), mp.decoded.payload.size,
+              p.latitude_i ? "LAT " : "", p.longitude_i ? "LON " : "", p.altitude ? "MSL " : "", p.altitude_hae ? "HAE " : "",
+              p.altitude_geoidal_separation ? "GEO " : "", p.PDOP ? "PDOP " : "", p.HDOP ? "HDOP " : "", p.VDOP ? "VDOP " : "",
+              p.sats_in_view ? "SIV " : "", p.fix_quality ? "FXQ " : "", p.fix_type ? "FXT " : "", p.timestamp ? "PTS " : "",
+              p.time ? "TIME " : "");
 
     if (p.time) {
         struct timeval tv;
@@ -110,12 +109,12 @@ meshtastic_MeshPacket *PositionModule::allocReply()
     // nodes shouldn't trust it anyways) Note: we allow a device with a local GPS to include the time, so that gpsless
     // devices can get time.
     if (getRTCQuality() < RTCQualityDevice) {
-        LOG_INFO("Stripping time %u from position send\n", p.time);
+        DEBUG_MSG("Stripping time %u from position send\n", p.time);
         p.time = 0;
     } else
-        LOG_INFO("Providing time to mesh %u\n", p.time);
+        DEBUG_MSG("Providing time to mesh %u\n", p.time);
 
-    LOG_INFO("Position reply: time=%i, latI=%i, lonI=-%i\n", p.time, p.latitude_i, p.longitude_i);
+    DEBUG_MSG("Position reply: time=%i, latI=%i, lonI=-%i\n", p.time, p.latitude_i, p.longitude_i);
 
     return allocDataProtobuf(p);
 }
@@ -129,10 +128,7 @@ void PositionModule::sendOurPosition(NodeNum dest, bool wantReplies)
     meshtastic_MeshPacket *p = allocReply();
     p->to = dest;
     p->decoded.want_response = wantReplies;
-    if (config.device.role == meshtastic_Config_DeviceConfig_Role_TRACKER)
-        p->priority = meshtastic_MeshPacket_Priority_RELIABLE;
-    else
-        p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
+    p->priority = meshtastic_MeshPacket_Priority_BACKGROUND;
     prevPacketId = p->id;
 
     service.sendToMesh(p, RX_SRC_LOCAL, true);
@@ -144,12 +140,11 @@ int32_t PositionModule::runOnce()
 
     // We limit our GPS broadcasts to a max rate
     uint32_t now = millis();
-    uint32_t intervalMs = config.position.position_broadcast_secs > 0 ? config.position.position_broadcast_secs * 1000
-                                                                      : default_broadcast_interval_secs * 1000;
+    uint32_t intervalMs = config.position.position_broadcast_secs > 0 ? config.position.position_broadcast_secs * 1000 : default_broadcast_interval_secs * 1000;
     if (lastGpsSend == 0 || (now - lastGpsSend) >= intervalMs) {
 
         // Only send packets if the channel is less than 40% utilized.
-        if (airTime->isTxAllowedChannelUtil()) {
+        if (airTime->channelUtilizationPercent() < max_channel_util_percent) {
             if (node->has_position && (node->position.latitude_i != 0 || node->position.longitude_i != 0)) {
                 lastGpsSend = now;
 
@@ -160,14 +155,17 @@ int32_t PositionModule::runOnce()
                 bool requestReplies = currentGeneration != radioGeneration;
                 currentGeneration = radioGeneration;
 
-                LOG_INFO("Sending pos@%x:6 to mesh (wantReplies=%d)\n", node->position.timestamp, requestReplies);
+                DEBUG_MSG("Sending pos@%x:6 to mesh (wantReplies=%d)\n", node->position.timestamp, requestReplies);
                 sendOurPosition(NODENUM_BROADCAST, requestReplies);
             }
+        } else {
+            DEBUG_MSG("Channel utilization is >40 percent. Skipping this opportunity to send.\n");
         }
+
     } else if (config.position.position_broadcast_smart_enabled) {
 
         // Only send packets if the channel is less than 25% utilized.
-        if (airTime->isTxAllowedChannelUtil(true)) {
+        if (airTime->channelUtilizationPercent() < polite_channel_util_percent) {
 
             meshtastic_NodeInfo *node2 = service.refreshMyNodeInfo(); // should guarantee there is now a position
 
@@ -196,8 +194,8 @@ int32_t PositionModule::runOnce()
                     bool requestReplies = currentGeneration != radioGeneration;
                     currentGeneration = radioGeneration;
 
-                    LOG_INFO("Sending smart pos@%x:6 to mesh (wantReplies=%d, d=%d, dtt=%d, tt=%d)\n", node2->position.timestamp,
-                             requestReplies, distance, distanceTravelThreshold, timeTravel);
+                    DEBUG_MSG("Sending smart pos@%x:6 to mesh (wantReplies=%d, d=%d, dtt=%d, tt=%d)\n", node2->position.timestamp,
+                              requestReplies, distance, distanceTravelThreshold, timeTravel);
                     sendOurPosition(NODENUM_BROADCAST, requestReplies);
 
                     // Set the current coords as our last ones, after we've compared distance with current and decided to send
@@ -210,6 +208,8 @@ int32_t PositionModule::runOnce()
                     lastGpsSend = now;
                 }
             }
+        } else {
+            DEBUG_MSG("Channel utilization is >25 percent. Skipping this opportunity to send.\n");
         }
     }
 

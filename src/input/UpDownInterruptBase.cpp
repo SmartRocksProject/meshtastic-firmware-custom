@@ -1,13 +1,16 @@
-#include "UpDownInterruptBase.h"
 #include "configuration.h"
+#include "UpDownInterruptBase.h"
 
-UpDownInterruptBase::UpDownInterruptBase(const char *name)
+UpDownInterruptBase::UpDownInterruptBase(
+    const char *name)
 {
     this->_originName = name;
 }
 
-void UpDownInterruptBase::init(uint8_t pinDown, uint8_t pinUp, uint8_t pinPress, char eventDown, char eventUp, char eventPressed,
-                               void (*onIntDown)(), void (*onIntUp)(), void (*onIntPress)())
+void UpDownInterruptBase::init(
+    uint8_t pinDown, uint8_t pinUp, uint8_t pinPress,
+    char eventDown, char eventUp, char eventPressed,
+    void (*onIntDown)(), void (*onIntUp)(), void (*onIntPress)())
 {
     this->_pinDown = pinDown;
     this->_pinUp = pinUp;
@@ -23,14 +26,15 @@ void UpDownInterruptBase::init(uint8_t pinDown, uint8_t pinUp, uint8_t pinPress,
     attachInterrupt(this->_pinDown, onIntDown, RISING);
     attachInterrupt(this->_pinUp, onIntUp, RISING);
 
-    LOG_DEBUG("GPIO initialized (%d, %d, %d)\n", this->_pinDown, this->_pinUp, pinPress);
+    DEBUG_MSG("GPIO initialized (%d, %d, %d)\n",
+        this->_pinDown, this->_pinUp, pinPress);
 }
 
 void UpDownInterruptBase::intPressHandler()
 {
     InputEvent e;
     e.source = this->_originName;
-    LOG_DEBUG("GPIO event Press\n");
+    DEBUG_MSG("GPIO event Press\n");
     e.inputEvent = this->_eventPressed;
     this->notifyObservers(&e);
 }
@@ -39,7 +43,7 @@ void UpDownInterruptBase::intDownHandler()
 {
     InputEvent e;
     e.source = this->_originName;
-    LOG_DEBUG("GPIO event Down\n");
+    DEBUG_MSG("GPIO event Down\n");
     e.inputEvent = this->_eventDown;
     this->notifyObservers(&e);
 }
@@ -48,7 +52,7 @@ void UpDownInterruptBase::intUpHandler()
 {
     InputEvent e;
     e.source = this->_originName;
-    LOG_DEBUG("GPIO event Up\n");
+    DEBUG_MSG("GPIO event Up\n");
     e.inputEvent = this->_eventUp;
     this->notifyObservers(&e);
 }

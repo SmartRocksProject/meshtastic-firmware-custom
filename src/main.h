@@ -1,21 +1,13 @@
 #pragma once
 
+#include <map>
 #include "GPSStatus.h"
 #include "NodeStatus.h"
 #include "PowerStatus.h"
 #include "graphics/Screen.h"
 #include "mesh/generated/meshtastic/telemetry.pb.h"
-#include <map>
 #if !defined(ARCH_PORTDUINO) && !defined(ARCH_STM32WL)
 #include <SparkFun_ATECCX08a_Arduino_Library.h>
-#endif
-#if defined(ARCH_ESP32) && !defined(CONFIG_IDF_TARGET_ESP32S2)
-#include "nimble/NimbleBluetooth.h"
-extern NimbleBluetooth *nimbleBluetooth;
-#endif
-#ifdef ARCH_NRF52
-#include "NRF52Bluetooth.h"
-extern NRF52Bluetooth *nrf52Bluetooth;
 #endif
 
 extern uint8_t screen_found;

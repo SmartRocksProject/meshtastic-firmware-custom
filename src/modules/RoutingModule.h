@@ -1,6 +1,6 @@
 #pragma once
-#include "Channels.h"
 #include "ProtobufModule.h"
+#include "Channels.h"
 
 /**
  * Routing module for router control messages

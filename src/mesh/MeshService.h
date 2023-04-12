@@ -14,8 +14,6 @@
 #include "../platform/portduino/SimRadio.h"
 #endif
 
-extern Allocator<meshtastic_QueueStatus> &queueStatusPool;
-
 /**
  * Top level app for this service.  keeps the mesh, the radio config and the queue of received packets.
  *
@@ -30,12 +28,6 @@ class MeshService
     /// we never hang because android hasn't been there in a while
     /// FIXME - save this to flash on deep sleep
     PointerQueue<meshtastic_MeshPacket> toPhoneQueue;
-
-    // keep list of QueueStatus packets to be send to the phone
-    PointerQueue<meshtastic_QueueStatus> toPhoneQueueStatusQueue;
-
-    // This holds the last QueueStatus send
-    meshtastic_QueueStatus lastQueueStatus;
 
     /// The current nonce for the newest packet which has been queued for the phone
     uint32_t fromNum = 0;
@@ -64,12 +56,6 @@ class MeshService
     /// Allows the bluetooth handler to free packets after they have been sent
     void releaseToPool(meshtastic_MeshPacket *p) { packetPool.release(p); }
 
-    /// Return the next QueueStatus packet destined to the phone.
-    meshtastic_QueueStatus *getQueueStatusForPhone() { return toPhoneQueueStatusQueue.dequeuePtr(0); }
-
-    // Release QueueStatus packet to pool
-    void releaseQueueStatusToPool(meshtastic_QueueStatus *p) { queueStatusPool.release(p); }
-
     /**
      *  Given a ToRadio buffer parse it and properly handle it (setup radio, owner or send packet into the mesh)
      * Called by PhoneAPI.handleToRadio.  Note: p is a scratch buffer, this function is allowed to write to it but it can not keep
@@ -80,7 +66,7 @@ class MeshService
     /** The radioConfig object just changed, call this to force the hw to change to the new settings
      * @return true if client devices should be sent a new set of radio configs
      */
-    bool reloadConfig(int saveWhat = SEGMENT_CONFIG | SEGMENT_MODULECONFIG | SEGMENT_DEVICESTATE | SEGMENT_CHANNELS);
+    bool reloadConfig(int saveWhat=SEGMENT_CONFIG | SEGMENT_MODULECONFIG | SEGMENT_DEVICESTATE | SEGMENT_CHANNELS);
 
     /// The owner User record just got updated, update our node DB and broadcast the info into the mesh
     void reloadOwner(bool shouldSave = true);
@@ -100,7 +86,7 @@ class MeshService
     /// Pull the latest power and time info into my nodeinfo
     meshtastic_NodeInfo *refreshMyNodeInfo();
 
-    /// Send a packet to the phone
+      /// Send a packet to the phone
     void sendToPhone(meshtastic_MeshPacket *p);
 
     bool isToPhoneQueueEmpty();
@@ -114,8 +100,6 @@ class MeshService
     /// needs to keep the packet around it makes a copy
     int handleFromRadio(const meshtastic_MeshPacket *p);
     friend class RoutingModule;
-
-    ErrorCode sendQueueStatusToPhone(const meshtastic_QueueStatus &qs, ErrorCode res, uint32_t mesh_packet_id);
 };
 
 extern MeshService service;

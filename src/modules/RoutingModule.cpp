@@ -1,8 +1,8 @@
+#include "configuration.h"
 #include "RoutingModule.h"
 #include "MeshService.h"
 #include "NodeDB.h"
 #include "Router.h"
-#include "configuration.h"
 #include "main.h"
 
 RoutingModule *routingModule;
@@ -24,8 +24,6 @@ bool RoutingModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, mesh
 
 meshtastic_MeshPacket *RoutingModule::allocReply()
 {
-    if (config.device.role == meshtastic_Config_DeviceConfig_Role_REPEATER)
-        return NULL;
     assert(currentRequest);
 
     // We only consider making replies if the request was a legit routing packet (not just something we were sniffing)
@@ -46,5 +44,5 @@ void RoutingModule::sendAckNak(meshtastic_Routing_Error err, NodeNum to, PacketI
 RoutingModule::RoutingModule() : ProtobufModule("routing", meshtastic_PortNum_ROUTING_APP, &meshtastic_Routing_msg)
 {
     isPromiscuous = true;
-    encryptedOk = config.device.rebroadcast_mode != meshtastic_Config_DeviceConfig_RebroadcastMode_LOCAL_ONLY;
+    encryptedOk = true;
 }

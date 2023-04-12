@@ -1,18 +1,20 @@
 #include "SerialModule.h"
 #include "MeshService.h"
-#include "NMEAWPL.h"
 #include "NodeDB.h"
 #include "RTC.h"
+#include "NMEAWPL.h"
 #include "Router.h"
 #include "configuration.h"
 #include <Arduino.h>
+
+#include <assert.h>
 
 /*
     SerialModule
         A simple interface to send messages over the mesh network by sending strings
         over a serial port.
 
-        There are no PIN defaults, you have to enable the second serial port yourself.
+        Default is to use RX GPIO 16 and TX GPIO 17.
 
     Need help with this module? Post your question on the Meshtastic Discourse:
        https://meshtastic.discourse.group
@@ -46,6 +48,8 @@
 
 #if (defined(ARCH_ESP32) || defined(ARCH_NRF52)) && !defined(TTGO_T_ECHO) && !defined(CONFIG_IDF_TARGET_ESP32S2)
 
+#define RXD2 16
+#define TXD2 17
 #define RX_BUFFER 128
 #define TIMEOUT 250
 #define BAUD 38400
@@ -59,24 +63,24 @@ SerialModuleRadio *serialModuleRadio;
 
 SerialModule::SerialModule() : StreamAPI(&Serial2), concurrency::OSThread("SerialModule") {}
 
-char serialBytes[meshtastic_Constants_DATA_PAYLOAD_LEN];
-size_t serialPayloadSize;
+char serialStringChar[meshtastic_Constants_DATA_PAYLOAD_LEN];
 
 SerialModuleRadio::SerialModuleRadio() : MeshModule("SerialModuleRadio")
 {
 
-    switch (moduleConfig.serial.mode) {
-    case meshtastic_ModuleConfig_SerialConfig_Serial_Mode_TEXTMSG:
-        ourPortNum = meshtastic_PortNum_TEXT_MESSAGE_APP;
-        break;
-    case meshtastic_ModuleConfig_SerialConfig_Serial_Mode_NMEA:
-        ourPortNum = meshtastic_PortNum_POSITION_APP;
-        break;
-    default:
-        ourPortNum = meshtastic_PortNum_SERIAL_APP;
-        // restrict to the serial channel for rx
-        boundChannel = Channels::serialChannel;
-        break;
+    switch (moduleConfig.serial.mode)
+    {
+        case meshtastic_ModuleConfig_SerialConfig_Serial_Mode_TEXTMSG:
+            ourPortNum = meshtastic_PortNum_TEXT_MESSAGE_APP;
+            break;
+        case meshtastic_ModuleConfig_SerialConfig_Serial_Mode_NMEA:
+            ourPortNum = meshtastic_PortNum_POSITION_APP;
+            break;
+        default:
+            ourPortNum = meshtastic_PortNum_SERIAL_APP;
+            // restrict to the serial channel for rx
+            boundChannel = Channels::serialChannel;
+            break;
     }
 }
 
@@ -100,12 +104,12 @@ int32_t SerialModule::runOnce()
     // moduleConfig.serial.timeout = 1000;
     // moduleConfig.serial.echo = 1;
 
-    if (moduleConfig.serial.enabled && moduleConfig.serial.rxd && moduleConfig.serial.txd) {
+    if (moduleConfig.serial.enabled) {
 
         if (firstTime) {
 
             // Interface with the serial peripheral from in here.
-            LOG_INFO("Initializing serial peripheral interface\n");
+            DEBUG_MSG("Initializing serial peripheral interface\n");
 
             uint32_t baud = 0;
 
@@ -158,11 +162,14 @@ int32_t SerialModule::runOnce()
                 baud = 921600;
             }
 
-#ifdef ARCH_ESP32
+#ifdef ARCH_ESP32 
             Serial2.setRxBufferSize(RX_BUFFER);
 
             if (moduleConfig.serial.rxd && moduleConfig.serial.txd) {
                 Serial2.begin(baud, SERIAL_8N1, moduleConfig.serial.rxd, moduleConfig.serial.txd);
+
+            } else {
+                Serial2.begin(baud, SERIAL_8N1, RXD2, TXD2);
             }
 #else
             if (moduleConfig.serial.rxd && moduleConfig.serial.txd)
@@ -194,20 +201,28 @@ int32_t SerialModule::runOnce()
                 // in NMEA mode send out GGA every 2 seconds, Don't read from Port
                 if (millis() - lastNmeaTime > 2000) {
                     lastNmeaTime = millis();
-                    printGGA(outbuf, sizeof(outbuf), nodeDB.getNode(myNodeInfo.my_node_num)->position);
+                    printGGA(outbuf, nodeDB.getNode(myNodeInfo.my_node_num)->position);
                     Serial2.printf("%s", outbuf);
                 }
             } else {
+                String serialString;
+
                 while (Serial2.available()) {
-                    serialPayloadSize = Serial2.readBytes(serialBytes, meshtastic_Constants_DATA_PAYLOAD_LEN);
+                    serialString = Serial2.readString();
+                    serialString.toCharArray(serialStringChar, meshtastic_Constants_DATA_PAYLOAD_LEN);
+
                     serialModuleRadio->sendPayload();
+
+                    DEBUG_MSG("Received: %s\n", serialStringChar);
                 }
             }
         }
 
         return (10);
     } else {
-        return disable();
+        DEBUG_MSG("Serial Module Disabled\n");
+
+        return INT32_MAX;
     }
 }
 
@@ -220,18 +235,14 @@ meshtastic_MeshPacket *SerialModuleRadio::allocReply()
 
 void SerialModuleRadio::sendPayload(NodeNum dest, bool wantReplies)
 {
-    meshtastic_Channel *ch = (boundChannel != NULL) ? &channels.getByName(boundChannel) : NULL;
     meshtastic_MeshPacket *p = allocReply();
     p->to = dest;
-    if (ch != NULL) {
-        p->channel = ch->index;
-    }
     p->decoded.want_response = wantReplies;
 
     p->want_ack = ACK;
 
-    p->decoded.payload.size = serialPayloadSize; // You must specify how many bytes are in the reply
-    memcpy(p->decoded.payload.bytes, serialBytes, p->decoded.payload.size);
+    p->decoded.payload.size = strlen(serialStringChar); // You must specify how many bytes are in the reply
+    memcpy(p->decoded.payload.bytes, serialStringChar, p->decoded.payload.size);
 
     service.sendToMesh(p);
 }
@@ -245,7 +256,7 @@ ProcessMessage SerialModuleRadio::handleReceived(const meshtastic_MeshPacket &mp
         }
 
         auto &p = mp.decoded;
-        // LOG_DEBUG("Received text msg self=0x%0x, from=0x%0x, to=0x%0x, id=%d, msg=%.*s\n",
+        // DEBUG_MSG("Received text msg self=0x%0x, from=0x%0x, to=0x%0x, id=%d, msg=%.*s\n",
         //          nodeDB.getNodeNum(), mp.from, mp.to, mp.id, p.payload.size, p.payload.bytes);
 
         if (getFrom(&mp) == nodeDB.getNodeNum()) {
@@ -260,7 +271,7 @@ ProcessMessage SerialModuleRadio::handleReceived(const meshtastic_MeshPacket &mp
                 //   TODO: need to find out why.
                 if (lastRxID != mp.id) {
                     lastRxID = mp.id;
-                    // LOG_DEBUG("* * Message came this device\n");
+                    // DEBUG_MSG("* * Message came this device\n");
                     // Serial2.println("* * Message came this device");
                     Serial2.printf("%s", p.payload.bytes);
                 }
@@ -287,11 +298,14 @@ ProcessMessage SerialModuleRadio::handleReceived(const meshtastic_MeshPacket &mp
                         decoded = &scratch;
                     }
                     // send position packet as WPL to the serial port
-                    printWPL(outbuf, sizeof(outbuf), *decoded, nodeDB.getNode(getFrom(&mp))->user.long_name);
+                    printWPL(outbuf, *decoded, nodeDB.getNode(getFrom(&mp))->user.long_name);
                     Serial2.printf("%s", outbuf);
                 }
             }
         }
+
+    } else {
+        DEBUG_MSG("Serial Module Disabled\n");
     }
     return ProcessMessage::CONTINUE; // Let others look at this message also if they want
 }
