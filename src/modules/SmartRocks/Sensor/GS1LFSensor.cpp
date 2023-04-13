@@ -17,7 +17,7 @@ bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
 
     ADS.setGain(1);
     ADS.setDataRate(7);
-    setContinuousMode(true);
+    setContinuousMode(false);
 
     // Traditional mode (assert above high threshold, de-assert below low)
     ADS.setComparatorMode(0);
