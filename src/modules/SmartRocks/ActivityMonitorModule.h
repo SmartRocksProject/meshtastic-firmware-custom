@@ -64,7 +64,7 @@ private:
         const struct freqRange {
             double low;
             double high;
-        } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
+        } frequencyRangeThreshold{.low = 60.0, .high = 80.0};
     } geophoneSensorData;
     bool geophoneInitialized{};
 
@@ -82,11 +82,13 @@ private:
 
         bool successfulRead{false};
         const uint32_t samplingFrequency{vadSampleRate};
+        /*
         const double amplitudeThreshold{1.0};
         const struct freqRange {
             double low;
             double high;
         } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
+        */
     } microphoneSensorData;
     bool microphoneInitialized{};
 };
