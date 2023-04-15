@@ -230,13 +230,14 @@ void ActivityMonitorModule::analyzeMicrophoneData() {
 
 void ActivityMonitorModule::sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest, bool wantReplies) {
     meshtastic_ActivityMonitorModuleConfig am;
+    am.nodeNum = data.nodeNum;
     am.has_gpsData = true;
     am.gpsData = {
         .latitude = data.gpsData.latitude,
         .longitude = data.gpsData.longitude,
         .altitude = data.gpsData.altitude,
     };
-    am.unixTimeStamp = data.unixTimeStamp;
+    am.unixTimeStamp = (int64_t) data.unixTimeStamp;
     am.detectionType = data.detectionType == MasterLogger::LogData::DETECTION_TYPE_SEISMIC
         ? meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
         : meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_VOICE;
@@ -254,10 +255,11 @@ bool ActivityMonitorModule::handleReceivedProtobuf(const meshtastic_MeshPacket &
     auto p = *pptr;
 
     MasterLogger::LogData data;
+    data.nodeNum = p.nodeNum;
     data.gpsData.latitude = p.gpsData.latitude;
     data.gpsData.longitude = p.gpsData.longitude;
     data.gpsData.altitude = p.gpsData.altitude;
-    data.unixTimeStamp = p.unixTimeStamp;
+    data.unixTimeStamp = (time_t) p.unixTimeStamp;
     data.detectionType = p.detectionType == meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
         ? MasterLogger::LogData::DETECTION_TYPE_SEISMIC
         : MasterLogger::LogData::DETECTION_TYPE_VOICE;

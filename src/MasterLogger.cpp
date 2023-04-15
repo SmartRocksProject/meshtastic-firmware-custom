@@ -64,8 +64,8 @@ void MasterLogger::writeData(LogData& data) {
     //        latDeg latMin latSec latCP lonDeg lonMin lonSec lonCP
     snprintf(
         fmtMessage, messageMaxLength,
-        "%s %s %d %d %d %c %d %d %d %c",
-        timeString, data.detectionType == LogData::DETECTION_TYPE_SEISMIC ? "S" : "V",
+        "%u %s %s %d %d %d %c %d %d %d %c",
+        data.nodeNum, timeString, data.detectionType == LogData::DETECTION_TYPE_SEISMIC ? "S" : "V",
         coord.getDMSLatDeg(), coord.getDMSLatMin(), coord.getDMSLatSec(), coord.getDMSLatCP(),
         coord.getDMSLonDeg(), coord.getDMSLonMin(), coord.getDMSLonSec(), coord.getDMSLonCP()
     );
@@ -83,6 +83,7 @@ void MasterLogger::writeData(LogData& data) {
 
 MasterLogger::LogData MasterLogger::getLogData(LogData::DetectionType detectionType) {
     MasterLogger::LogData data;
+    data.nodeNum = nodeDB.getNodeNum();
     data.gpsData = {
         gpsStatus->getLatitude(),
         gpsStatus->getLongitude(),

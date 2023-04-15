@@ -24,6 +24,7 @@ typedef struct _meshtastic_ActivityMonitorModuleConfig_GPS {
 
 /* Activity monitor module configuration. */
 typedef struct _meshtastic_ActivityMonitorModuleConfig {
+    uint32_t nodeNum;
     bool has_gpsData;
     meshtastic_ActivityMonitorModuleConfig_GPS gpsData;
     int64_t unixTimeStamp;
@@ -45,24 +46,26 @@ extern "C" {
 
 
 /* Initializer values for message structs */
-#define meshtastic_ActivityMonitorModuleConfig_init_default {false, meshtastic_ActivityMonitorModuleConfig_GPS_init_default, 0, _meshtastic_ActivityMonitorModuleConfig_DetectionType_MIN}
+#define meshtastic_ActivityMonitorModuleConfig_init_default {0, false, meshtastic_ActivityMonitorModuleConfig_GPS_init_default, 0, _meshtastic_ActivityMonitorModuleConfig_DetectionType_MIN}
 #define meshtastic_ActivityMonitorModuleConfig_GPS_init_default {0, 0, 0}
-#define meshtastic_ActivityMonitorModuleConfig_init_zero {false, meshtastic_ActivityMonitorModuleConfig_GPS_init_zero, 0, _meshtastic_ActivityMonitorModuleConfig_DetectionType_MIN}
+#define meshtastic_ActivityMonitorModuleConfig_init_zero {0, false, meshtastic_ActivityMonitorModuleConfig_GPS_init_zero, 0, _meshtastic_ActivityMonitorModuleConfig_DetectionType_MIN}
 #define meshtastic_ActivityMonitorModuleConfig_GPS_init_zero {0, 0, 0}
 
 /* Field tags (for use in manual encoding/decoding) */
 #define meshtastic_ActivityMonitorModuleConfig_GPS_latitude_tag 1
 #define meshtastic_ActivityMonitorModuleConfig_GPS_longitude_tag 2
 #define meshtastic_ActivityMonitorModuleConfig_GPS_altitude_tag 3
-#define meshtastic_ActivityMonitorModuleConfig_gpsData_tag 1
-#define meshtastic_ActivityMonitorModuleConfig_unixTimeStamp_tag 2
-#define meshtastic_ActivityMonitorModuleConfig_detectionType_tag 3
+#define meshtastic_ActivityMonitorModuleConfig_nodeNum_tag 1
+#define meshtastic_ActivityMonitorModuleConfig_gpsData_tag 2
+#define meshtastic_ActivityMonitorModuleConfig_unixTimeStamp_tag 3
+#define meshtastic_ActivityMonitorModuleConfig_detectionType_tag 4
 
 /* Struct field encoding specification for nanopb */
 #define meshtastic_ActivityMonitorModuleConfig_FIELDLIST(X, a) \
-X(a, STATIC,   OPTIONAL, MESSAGE,  gpsData,           1) \
-X(a, STATIC,   SINGULAR, INT64,    unixTimeStamp,     2) \
-X(a, STATIC,   SINGULAR, UENUM,    detectionType,     3)
+X(a, STATIC,   SINGULAR, UINT32,   nodeNum,           1) \
+X(a, STATIC,   OPTIONAL, MESSAGE,  gpsData,           2) \
+X(a, STATIC,   SINGULAR, INT64,    unixTimeStamp,     3) \
+X(a, STATIC,   SINGULAR, UENUM,    detectionType,     4)
 #define meshtastic_ActivityMonitorModuleConfig_CALLBACK NULL
 #define meshtastic_ActivityMonitorModuleConfig_DEFAULT NULL
 #define meshtastic_ActivityMonitorModuleConfig_gpsData_MSGTYPE meshtastic_ActivityMonitorModuleConfig_GPS
@@ -83,7 +86,7 @@ extern const pb_msgdesc_t meshtastic_ActivityMonitorModuleConfig_GPS_msg;
 
 /* Maximum encoded size of messages (where known) */
 #define meshtastic_ActivityMonitorModuleConfig_GPS_size 33
-#define meshtastic_ActivityMonitorModuleConfig_size 48
+#define meshtastic_ActivityMonitorModuleConfig_size 54
 
 #ifdef __cplusplus
 } /* extern "C" */
