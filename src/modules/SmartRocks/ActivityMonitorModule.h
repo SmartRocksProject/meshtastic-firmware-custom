@@ -74,7 +74,7 @@ private:
         const struct freqRange {
             double low;
             double high;
-        } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
+        } frequencyRangeThreshold{.low = 2.0, .high = 100.0};
     } microphoneSensorData;
     bool microphoneInitialized{};
 };

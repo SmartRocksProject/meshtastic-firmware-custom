@@ -132,7 +132,7 @@ void ActivityMonitorModule::collectGeophoneData() {
         // Sleep for any remaining time between samples.
         long long remainingTime = (1e6 / geophoneSensorData.samplingFrequency) - (long long) (micros() - microseconds);
         if(remainingTime < 0) {
-            LOG_INFO("(GS1LF) Sampling frequency too high!\n");
+            LOG_DEBUG("(GS1LF) Sampling frequency too high!\n");
         } else if(remainingTime > 0) {
             delayMicroseconds(remainingTime);
         }
