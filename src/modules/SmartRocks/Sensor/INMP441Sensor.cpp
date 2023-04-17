@@ -44,7 +44,7 @@ bool INMP441Sensor::setup(uint32_t sampleRate, int bufferLen) {
 
 size_t INMP441Sensor::readSamples(int16_t* samples) {
     size_t bytesIn = 0;
-    esp_err_t result = i2s_read(I2S_PORT, samples, _bufferLen, &bytesIn, pdMS_TO_TICKS(90)); // Wait 90 ms max for data
+    esp_err_t result = i2s_read(I2S_PORT, samples, _bufferLen * sizeof(int16_t), &bytesIn, portMAX_DELAY); // Wait 90 ms max for data
 
     if(result == ESP_OK) {
         int16_t samples_read = bytesIn / sizeof(int16_t);

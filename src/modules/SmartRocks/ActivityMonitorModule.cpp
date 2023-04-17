@@ -24,7 +24,7 @@ ActivityMonitorModule* activityMonitorModule;
 
 static void activateMonitor(void* p) {
     pinMode(ADS1115_ALERT_PIN, INPUT);
-    attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, FALLING);
+    attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, RISING);
     while(true) {
         uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if(ulNotifiedValue > 0) {
@@ -50,6 +50,7 @@ ActivityMonitorModule::ActivityMonitorModule()
 
         microphoneInitialized = true;
     }
+    LOG_INFO("Geophone initialized: %d, Microphone initialized: %d\n", geophoneInitialized, microphoneInitialized);
 }
 
 ActivityMonitorModule::~ActivityMonitorModule() {
@@ -75,17 +76,20 @@ void ActivityMonitorModule::collectData() {
     microphoneSensorData.successfulRead = false;
     // Collect geophone data.
     if(geophoneInitialized) {
-        geophoneCollecting.lock();
-        xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
+        //geophoneCollecting.lock();
+        //xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
+        collectGeophoneData();
     }
 
     // Collect microphone data.
     if(microphoneInitialized) {
-        microphoneCollecting.lock();
-        xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
+        //microphoneCollecting.lock();
+        //xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
+        collectMicrophoneData();
     }
     
     // Wait for data collection to finish by waiting for both locks to be unlocked.
+    /*
     if(geophoneInitialized) {
         geophoneCollecting.lock();
         geophoneCollecting.unlock();
@@ -94,13 +98,11 @@ void ActivityMonitorModule::collectData() {
         microphoneCollecting.lock();
         microphoneCollecting.unlock();
     }
+    */
 
-    // Analyze and send data if event occured.
-    if(geophoneSensorData.successfulRead || microphoneSensorData.successfulRead) {
-        analyzeData();
-        geophoneSensorData.successfulRead = false;
-        microphoneSensorData.successfulRead = false;
-    }
+    analyzeData();
+    geophoneSensorData.successfulRead = false;
+    microphoneSensorData.successfulRead = false;
 
     // Reset collection flag.
     dataCollectionStarted = false;
@@ -149,8 +151,9 @@ void ActivityMonitorModule::collectMicrophoneData() {
     // Collect microphone data.
     LOG_INFO("Collecting microphone data...\n");
 
-    if(microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer) != microphoneSensorData.vadBufferLength) {
-        LOG_INFO("Error when reading microphone data!\n");
+    size_t num_bytes;
+    if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer)) < microphoneSensorData.vadBufferLength) {
+        LOG_INFO("Error when reading microphone data! Read %u bytes\n", num_bytes);
         return;
     }
 
@@ -210,7 +213,7 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         sendActivityMonitorData(data);
     #endif
     } else {
-        LOG_INFO("\n(Seismic) No event detected.\n\n");
+        LOG_INFO("(Seismic) No event detected.\n\n");
     }
 }
 
@@ -224,7 +227,7 @@ void ActivityMonitorModule::analyzeMicrophoneData() {
         sendActivityMonitorData(data);
     #endif
     } else {
-        LOG_INFO("\n(Vocal) No event detected.\n\n");
+        LOG_INFO("(Vocal) No event detected.\n\n");
     }
 }
 
@@ -247,6 +250,7 @@ void ActivityMonitorModule::sendActivityMonitorData(MasterLogger::LogData& data,
     p->decoded.want_response = wantReplies;
     p->priority = meshtastic_MeshPacket_Priority_MAX;
 
+    LOG_DEBUG("Sending activity monitor data to network\n");
     service.sendToMesh(p);
 }
 
@@ -264,6 +268,7 @@ bool ActivityMonitorModule::handleReceivedProtobuf(const meshtastic_MeshPacket &
         ? MasterLogger::LogData::DETECTION_TYPE_SEISMIC
         : MasterLogger::LogData::DETECTION_TYPE_VOICE;
     
+    LOG_DEBUG("Received activity monitor data from node: %d\n", data.nodeNum);
     MasterLogger::writeData(data);
 #endif
     if(mp.decoded.want_response) {

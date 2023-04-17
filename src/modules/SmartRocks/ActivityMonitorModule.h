@@ -64,7 +64,7 @@ private:
         const struct freqRange {
             double low;
             double high;
-        } frequencyRangeThreshold{.low = 60.0, .high = 80.0};
+        } frequencyRangeThreshold{.low = 2.0, .high = 80.0};
     } geophoneSensorData;
     bool geophoneInitialized{};
 

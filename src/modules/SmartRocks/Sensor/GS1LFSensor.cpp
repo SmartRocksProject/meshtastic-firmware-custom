@@ -29,7 +29,7 @@ bool GS1LFSensor::setup(double lowThreshold, double highThreshold) {
     ADS.setComparatorLatch(1);
 
     // Trigger ALERT after single conversion breaks threshold.
-    ADS.setComparatorQueConvert(0);
+    ADS.setComparatorQueConvert(2);
 
     // ALERT on/off thresholds
     float f = ADS.toVoltage(1);
