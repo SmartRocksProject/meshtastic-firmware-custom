@@ -107,3 +107,10 @@ bool MasterLogger::readLog(String& outLog) {
     }
     return true;
 }
+
+void MasterLogger::deleteLog() {
+    {
+        concurrency::LockGuard g(spiLock);
+        filesystem->remove(MASTER_FILE_NAME);
+    }
+}

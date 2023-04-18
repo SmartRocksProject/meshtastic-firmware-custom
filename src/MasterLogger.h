@@ -46,6 +46,8 @@ public:
 
     static bool readLog(String& outLog);
 
+    static void deleteLog();
+
     static void useFallbackFS();
     static void useSDFS();
 private:

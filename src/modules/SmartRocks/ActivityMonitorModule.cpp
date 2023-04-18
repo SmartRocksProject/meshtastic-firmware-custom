@@ -37,6 +37,9 @@ static void activateMonitor(void* p) {
 ActivityMonitorModule::ActivityMonitorModule()
     : ProtobufModule("ActivityMonitorModule", meshtastic_PortNum_ACTIVITY_MONITOR_APP, &meshtastic_ActivityMonitorModuleConfig_msg), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
+#ifdef WIPE_LOG_ON_STARTUP
+    MasterLogger::deleteLog();
+#endif
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
         geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
@@ -207,10 +210,10 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         LOG_INFO("    Fundamental frequency: %f\n", fundamentalFreq);
         LOG_INFO("    Max amplitude: %f\n\n", maxAmplitude);
         
-    #ifdef ACTIVITY_LOG_TO_FILE
         MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
-        MasterLogger::writeData(data);
         sendActivityMonitorData(data);
+    #ifdef ACTIVITY_LOG_TO_FILE
+        MasterLogger::writeData(data);
     #endif
     } else {
         LOG_INFO("(Seismic) No event detected.\n\n");
@@ -221,10 +224,10 @@ void ActivityMonitorModule::analyzeMicrophoneData() {
     vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
     if(vadState == VAD_SPEECH) {
         LOG_INFO("\n(Vocal) Event detected!\n\n");
-    #ifdef ACTIVITY_LOG_TO_FILE
         MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
-        MasterLogger::writeData(data);
         sendActivityMonitorData(data);
+    #ifdef ACTIVITY_LOG_TO_FILE
+        MasterLogger::writeData(data);
     #endif
     } else {
         LOG_INFO("(Vocal) No event detected.\n\n");

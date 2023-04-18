@@ -73,7 +73,7 @@ private:
         
         enum { 
             vadSampleRate = 16000,
-            vadFrameLengthMs = 30,
+            vadFrameLengthMs = 1000,
             vadBufferLength = (vadFrameLengthMs * vadSampleRate / 1000)
         };
         vad_handle_t vad_inst;
