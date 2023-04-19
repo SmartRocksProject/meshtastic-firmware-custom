@@ -11,6 +11,7 @@
 #include "mesh/generated/meshtastic/activitymonitor.pb.h"
 #include "MasterLogger.h"
 
+
 class ActivityMonitorModule : public ProtobufModule<meshtastic_ActivityMonitorModuleConfig>, public concurrency::NotifiedWorkerThread {
 public:
     ActivityMonitorModule();
@@ -70,7 +71,14 @@ private:
 
     struct MicrophoneSensorData {
         INMP441Sensor inmp441Sensor;
+        uint32_t sample_rate = 16000;
         
+        //uint8_t* inputData;
+        int32_t sBuffer[64];
+        size_t ammtbytes;
+        int16_t outputdata[16];
+        int sizeofOutput = 16;
+        float amplitudeThreshold{25}; 
         enum { 
             vadSampleRate = 16000,
             vadFrameLengthMs = 1000,

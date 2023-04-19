@@ -47,7 +47,7 @@ ActivityMonitorModule::ActivityMonitorModule()
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
     }
-    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, microphoneSensorData.vadBufferLength)) {
+    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, 64)) {
         microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
         microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
 
@@ -81,14 +81,16 @@ void ActivityMonitorModule::collectData() {
     if(geophoneInitialized) {
         //geophoneCollecting.lock();
         //xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
-        collectGeophoneData();
+        //collectGeophoneData();
+        activityMonitorModule->collectGeophoneData();
     }
 
     // Collect microphone data.
     if(microphoneInitialized) {
         //microphoneCollecting.lock();
         //xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
-        collectMicrophoneData();
+        //collectMicrophoneData();
+        activityMonitorModule->collectMicrophoneData();
     }
     
     // Wait for data collection to finish by waiting for both locks to be unlocked.
@@ -154,11 +156,13 @@ void ActivityMonitorModule::collectMicrophoneData() {
     // Collect microphone data.
     LOG_INFO("Collecting microphone data...\n");
 
-    size_t num_bytes;
-    if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer)) < microphoneSensorData.vadBufferLength) {
-        LOG_INFO("Error when reading microphone data! Read %u bytes\n", num_bytes);
-        return;
-    }
+    // size_t num_bytes;
+    // if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer)) < microphoneSensorData.vadBufferLength) {
+    //     LOG_INFO("Error when reading microphone data! Read %u bytes\n", num_bytes);
+    //     return;
+    // }
+
+    microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.outputdata);
 
     LOG_INFO("Finished collecting microphone data.\n");
     microphoneSensorData.successfulRead = true;
@@ -221,17 +225,47 @@ void ActivityMonitorModule::analyzeGeophoneData() {
 }
 
 void ActivityMonitorModule::analyzeMicrophoneData() {
-    vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
-    if(vadState == VAD_SPEECH) {
-        LOG_INFO("\n(Vocal) Event detected!\n\n");
-        MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
-        sendActivityMonitorData(data);
-    #ifdef ACTIVITY_LOG_TO_FILE
-        MasterLogger::writeData(data);
-    #endif
-    } else {
-        LOG_INFO("(Vocal) No event detected.\n\n");
-    }
+
+int16_t MaxVal = 0;
+        for(int i = 0; i < 16; i++){
+            Serial.println(microphoneSensorData.outputdata[i]);
+            if(microphoneSensorData.outputdata[i] > MaxVal){
+                MaxVal = microphoneSensorData.outputdata[i];
+            }
+            else if(microphoneSensorData.outputdata[i] * (-1) > MaxVal){
+                MaxVal = microphoneSensorData.outputdata[i] * (-1);
+            }
+        }
+        if(MaxVal > microphoneSensorData.amplitudeThreshold){
+            LOG_INFO("\n(Vocal) Event detected!\n\n");
+                #ifdef ACTIVITY_LOG_TO_FILE
+                    MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+                    MasterLogger::writeData(data);
+                    sendActivityMonitorData(data);
+                #endif
+                
+        }
+        else{
+            LOG_INFO("\n(Vocal) No event detected.\n\n");
+        }
+
+
+
+
+
+    // vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
+    // if(vadState == VAD_SPEECH) {
+    //     LOG_INFO("\n(Vocal) Event detected!\n\n");
+    //     MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+    //     sendActivityMonitorData(data);
+    // #ifdef ACTIVITY_LOG_TO_FILE
+    //     MasterLogger::writeData(data);
+    // #endif
+    // }
+    
+    //  else {
+    //     LOG_INFO("(Vocal) No event detected.\n\n");
+    // }
 }
 
 void ActivityMonitorModule::sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest, bool wantReplies) {
