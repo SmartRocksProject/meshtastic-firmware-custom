@@ -39,13 +39,8 @@ private:
     void analyzeGeophoneData();
     void analyzeMicrophoneData();
 
-    static void geophoneCollectThread(void* p);
-    static void microphoneCollectThread(void* p);
-
     void sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest = NODENUM_BROADCAST, bool wantReplies = false);
 private:
-    concurrency::Lock geophoneCollecting{};
-    concurrency::Lock microphoneCollecting{};
     concurrency::Lock collectionFlagLock{};
     bool dataCollectionStarted{};
 
@@ -56,7 +51,7 @@ private:
         float* outputData;
 
         bool successfulRead{false};
-        enum { numSamples = 4096 };
+        enum { numSamples = 2048 };
         const double samplingFrequency{860.0};
         const double lowThreshold{0.3};
         const double highThreshold{1.0};
@@ -72,18 +67,15 @@ private:
         INMP441Sensor inmp441Sensor;
         
         enum { 
-            vadSampleRate = 16000,
-            vadFrameLengthMs = 1000,
-            vadBufferLength = (vadFrameLengthMs * vadSampleRate / 1000)
+            sampleRate = 16000,
+            frameLengthMs = 30,
+            bufferLength = (frameLengthMs * sampleRate / 1000)
         };
-        vad_handle_t vad_inst;
-        int16_t* vadBuffer;
-        //uint8_t* inputData;
+        int16_t* samples;
 
         bool successfulRead{false};
-        const uint32_t samplingFrequency{vadSampleRate};
+        const double amplitudeThreshold{15000.0};
         /*
-        const double amplitudeThreshold{1.0};
         const struct freqRange {
             double low;
             double high;

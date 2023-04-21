@@ -47,10 +47,8 @@ ActivityMonitorModule::ActivityMonitorModule()
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
     }
-    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, microphoneSensorData.vadBufferLength)) {
-        microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
-        microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
-
+    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.sampleRate, microphoneSensorData.bufferLength)) {
+        microphoneSensorData.samples = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.bufferLength);
         microphoneInitialized = true;
     }
     LOG_INFO("Geophone initialized: %d, Microphone initialized: %d\n", geophoneInitialized, microphoneInitialized);
@@ -59,8 +57,7 @@ ActivityMonitorModule::ActivityMonitorModule()
 ActivityMonitorModule::~ActivityMonitorModule() {
     free(geophoneSensorData.inputData);
     free(geophoneSensorData.outputData);
-    free(microphoneSensorData.vadBuffer);
-    free(microphoneSensorData.vad_inst);
+    free(microphoneSensorData.samples);
 }
 
 void ActivityMonitorModule::onNotify(uint32_t notification) {
@@ -77,31 +74,16 @@ void ActivityMonitorModule::onNotify(uint32_t notification) {
 void ActivityMonitorModule::collectData() {
     geophoneSensorData.successfulRead = false;
     microphoneSensorData.successfulRead = false;
+    
     // Collect geophone data.
     if(geophoneInitialized) {
-        //geophoneCollecting.lock();
-        //xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
         collectGeophoneData();
     }
 
     // Collect microphone data.
     if(microphoneInitialized) {
-        //microphoneCollecting.lock();
-        //xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
         collectMicrophoneData();
     }
-    
-    // Wait for data collection to finish by waiting for both locks to be unlocked.
-    /*
-    if(geophoneInitialized) {
-        geophoneCollecting.lock();
-        geophoneCollecting.unlock();
-    }
-    if(microphoneInitialized) {
-        microphoneCollecting.lock();
-        microphoneCollecting.unlock();
-    }
-    */
 
     analyzeData();
     geophoneSensorData.successfulRead = false;
@@ -109,18 +91,6 @@ void ActivityMonitorModule::collectData() {
 
     // Reset collection flag.
     dataCollectionStarted = false;
-}
-
-void ActivityMonitorModule::geophoneCollectThread(void* p) {
-    activityMonitorModule->collectGeophoneData();
-    activityMonitorModule->geophoneCollecting.unlock();
-    vTaskDelete(NULL);
-}
-
-void ActivityMonitorModule::microphoneCollectThread(void* p) {
-    activityMonitorModule->collectMicrophoneData();
-    activityMonitorModule->microphoneCollecting.unlock();
-    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::collectGeophoneData() {
@@ -155,7 +125,7 @@ void ActivityMonitorModule::collectMicrophoneData() {
     LOG_INFO("Collecting microphone data...\n");
 
     size_t num_bytes;
-    if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer)) < microphoneSensorData.vadBufferLength) {
+    if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.samples)) < microphoneSensorData.bufferLength) {
         LOG_INFO("Error when reading microphone data! Read %u bytes\n", num_bytes);
         return;
     }
@@ -221,8 +191,20 @@ void ActivityMonitorModule::analyzeGeophoneData() {
 }
 
 void ActivityMonitorModule::analyzeMicrophoneData() {
-    vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
-    if(vadState == VAD_SPEECH) {
+    for(int i = 0; i < 64; i++) {
+        Serial.println(microphoneSensorData.samples[i]);
+    }
+    
+    int16_t maxVal = 0;
+    for(int i = 0; i < microphoneSensorData.bufferLength; i++) {
+        if(microphoneSensorData.samples[i] > maxVal) {
+            maxVal = microphoneSensorData.samples[i];
+        } else if(microphoneSensorData.samples[i] < -maxVal) {
+            maxVal = -microphoneSensorData.samples[i];
+        }
+    }
+
+    if(maxVal > microphoneSensorData.amplitudeThreshold) {
         LOG_INFO("\n(Vocal) Event detected!\n\n");
         MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
         sendActivityMonitorData(data);

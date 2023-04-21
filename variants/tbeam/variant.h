@@ -46,9 +46,9 @@
 
 #define ADS1115_ALERT_PIN           (14)
 
-#define I2S_SCK                     (32)
+#define I2S_SCK                     (25)
 #define I2S_WS                      (15)
-#define I2S_SD                      (33)
+#define I2S_SD                      (13)
 
 // Uncomment below to enable file logging and node sharing.
 #define ACTIVITY_LOG_TO_FILE

@@ -15,7 +15,7 @@ bool INMP441Sensor::setup(uint32_t sampleRate, int bufferLen) {
         .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
         .communication_format = i2s_comm_format_t(I2S_COMM_FORMAT_STAND_I2S),
         .intr_alloc_flags = 0,
-        .dma_buf_count = 8,
+        .dma_buf_count = 2,
         .dma_buf_len = _bufferLen,
         .use_apll = false
     };
