@@ -74,7 +74,7 @@ private:
         int16_t* samples;
 
         bool successfulRead{false};
-        const double amplitudeThreshold{15000.0};
+        const double amplitudeThreshold{100.0};
         /*
         const struct freqRange {
             double low;
