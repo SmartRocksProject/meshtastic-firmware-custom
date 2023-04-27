@@ -73,7 +73,10 @@ void MasterLogger::writeData(LogData& data) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = filesystem->open(MASTER_FILE_NAME, "w");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "a");
+        if(!masterFile) {
+            masterFile = filesystem->open(MASTER_FILE_NAME, "w", true);
+        }
         if(masterFile) {
             masterFile.println(fmtMessage);
             masterFile.close();

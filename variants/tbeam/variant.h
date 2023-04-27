@@ -52,7 +52,7 @@
 
 // Uncomment below to enable file logging and node sharing.
 #define ACTIVITY_LOG_TO_FILE
-#define WIPE_LOG_ON_STARTUP
+//#define WIPE_LOG_ON_STARTUP
 
 // Leave undefined to disable our PMU IRQ handler.  DO NOT ENABLE THIS because the pmuirq can cause sperious interrupts
 // and waking from light sleep
