@@ -7,6 +7,11 @@
 #include <freertos/task.h>
 
 #include "MasterLogger.h"
+#include "MeshService.h"
+#include "GPSStatus.h"
+#include "RTC.h"
+
+extern meshtastic::GPSStatus *gpsStatus;
 
 static void sensorInterrupt() {
     BaseType_t taskYieldRequired = pdFALSE;
@@ -19,7 +24,7 @@ ActivityMonitorModule* activityMonitorModule;
 
 static void activateMonitor(void* p) {
     pinMode(ADS1115_ALERT_PIN, INPUT);
-    attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, FALLING);
+    attachInterrupt(ADS1115_ALERT_PIN, sensorInterrupt, RISING);
     while(true) {
         uint32_t ulNotifiedValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if(ulNotifiedValue > 0) {
@@ -30,8 +35,11 @@ static void activateMonitor(void* p) {
 }
 
 ActivityMonitorModule::ActivityMonitorModule()
-    : SinglePortModule("ActivityMonitorModule", meshtastic_PortNum_PRIVATE_APP), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
+    : ProtobufModule("ActivityMonitorModule", meshtastic_PortNum_ACTIVITY_MONITOR_APP, &meshtastic_ActivityMonitorModuleConfig_msg), concurrency::NotifiedWorkerThread("ActivityMonitorModule")
 {
+#ifdef WIPE_LOG_ON_STARTUP
+    MasterLogger::deleteLog();
+#endif
     if(geophoneSensorData.gs1lfSensor.setup(geophoneSensorData.lowThreshold, geophoneSensorData.highThreshold)) {
         geophoneSensorData.inputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
         geophoneSensorData.outputData = (float*) ps_malloc(sizeof(float) * geophoneSensorData.numSamples);
@@ -39,21 +47,17 @@ ActivityMonitorModule::ActivityMonitorModule()
 
         xTaskCreate(activateMonitor, "activateMonitor", 1024, NULL, tskIDLE_PRIORITY, &runningTaskHandle);
     }
-    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.samplingFrequency, microphoneSensorData.vadBufferLength)) {
-        //microphoneSensorData.outputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.numSamples);
-        //microphoneSensorData.inputData = (uint8_t*) ps_malloc(sizeof(uint8_t) * microphoneSensorData.VadBufferLength);
-        microphoneSensorData.vadBuffer = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.vadBufferLength);
-        microphoneSensorData.vad_inst = vad_create(VAD_MODE_4);
-
+    if(microphoneSensorData.inmp441Sensor.setup(microphoneSensorData.sampleRate, microphoneSensorData.bufferLength)) {
+        microphoneSensorData.samples = (int16_t*) ps_malloc(sizeof(int16_t) * microphoneSensorData.bufferLength);
         microphoneInitialized = true;
     }
+    LOG_INFO("Geophone initialized: %d, Microphone initialized: %d\n", geophoneInitialized, microphoneInitialized);
 }
 
 ActivityMonitorModule::~ActivityMonitorModule() {
     free(geophoneSensorData.inputData);
     free(geophoneSensorData.outputData);
-    free(microphoneSensorData.vadBuffer);
-    free(microphoneSensorData.vad_inst);
+    free(microphoneSensorData.samples);
 }
 
 void ActivityMonitorModule::onNotify(uint32_t notification) {
@@ -70,49 +74,23 @@ void ActivityMonitorModule::onNotify(uint32_t notification) {
 void ActivityMonitorModule::collectData() {
     geophoneSensorData.successfulRead = false;
     microphoneSensorData.successfulRead = false;
+    
     // Collect geophone data.
     if(geophoneInitialized) {
-        geophoneCollecting.lock();
-        xTaskCreate(ActivityMonitorModule::geophoneCollectThread, "geophoneCollectThread", 4 * 1024, NULL, 5, NULL);
+        collectGeophoneData();
     }
 
     // Collect microphone data.
     if(microphoneInitialized) {
-        microphoneCollecting.lock();
-        xTaskCreate(ActivityMonitorModule::microphoneCollectThread, "microphoneCollectThread", 4 * 1024, NULL, 5, NULL);
-    }
-    
-    // Wait for data collection to finish by waiting for both locks to be unlocked.
-    if(geophoneInitialized) {
-        geophoneCollecting.lock();
-        geophoneCollecting.unlock();
-    }
-    if(microphoneInitialized) {
-        microphoneCollecting.lock();
-        microphoneCollecting.unlock();
+        collectMicrophoneData();
     }
 
-    // Analyze and send data if event occured.
-    if(geophoneSensorData.successfulRead || microphoneSensorData.successfulRead) {
-        analyzeData();
-        geophoneSensorData.successfulRead = false;
-        microphoneSensorData.successfulRead = false;
-    }
+    analyzeData();
+    geophoneSensorData.successfulRead = false;
+    microphoneSensorData.successfulRead = false;
 
     // Reset collection flag.
     dataCollectionStarted = false;
-}
-
-void ActivityMonitorModule::geophoneCollectThread(void* p) {
-    activityMonitorModule->collectGeophoneData();
-    activityMonitorModule->geophoneCollecting.unlock();
-    vTaskDelete(NULL);
-}
-
-void ActivityMonitorModule::microphoneCollectThread(void* p) {
-    activityMonitorModule->collectMicrophoneData();
-    activityMonitorModule->microphoneCollecting.unlock();
-    vTaskDelete(NULL);
 }
 
 void ActivityMonitorModule::collectGeophoneData() {
@@ -146,8 +124,9 @@ void ActivityMonitorModule::collectMicrophoneData() {
     // Collect microphone data.
     LOG_INFO("Collecting microphone data...\n");
 
-    if(microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.vadBuffer) != microphoneSensorData.vadBufferLength) {
-        LOG_INFO("Error when reading microphone data!\n");
+    size_t num_bytes;
+    if((num_bytes = microphoneSensorData.inmp441Sensor.readSamples(microphoneSensorData.samples)) < microphoneSensorData.bufferLength) {
+        LOG_INFO("Error when reading microphone data! Read %u bytes\n", num_bytes);
         return;
     }
 
@@ -201,23 +180,95 @@ void ActivityMonitorModule::analyzeGeophoneData() {
         LOG_INFO("    Fundamental frequency: %f\n", fundamentalFreq);
         LOG_INFO("    Max amplitude: %f\n\n", maxAmplitude);
         
+        MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
+        sendActivityMonitorData(data);
     #ifdef ACTIVITY_LOG_TO_FILE
-        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_SEISMIC);
+        MasterLogger::writeData(data);
     #endif
     } else {
-        LOG_INFO("\n(Seismic) No event detected.\n\n");
+        LOG_INFO("(Seismic) No event detected.\n\n");
     }
 }
 
 void ActivityMonitorModule::analyzeMicrophoneData() {
-    vad_state_t vadState = vad_process(microphoneSensorData.vad_inst, microphoneSensorData.vadBuffer, microphoneSensorData.vadSampleRate, microphoneSensorData.vadFrameLengthMs);
-    if(vadState == VAD_SPEECH) {
-        LOG_INFO("\n(Vocal) Event detected!\n\n");
+    for(int i = 0; i < 64; i++) {
+        Serial.println(microphoneSensorData.samples[i]);
+    }
+    
+    int16_t maxVal = 0;
+    for(int i = 0; i < microphoneSensorData.bufferLength; i++) {
+        if(microphoneSensorData.samples[i] > maxVal) {
+            maxVal = microphoneSensorData.samples[i];
+        } else if(microphoneSensorData.samples[i] < -maxVal) {
+            maxVal = -microphoneSensorData.samples[i];
+        }
+    }
 
+    if(maxVal > microphoneSensorData.amplitudeThreshold) {
+        LOG_INFO("\n(Vocal) Event detected!\n\n");
+        MasterLogger::LogData data = MasterLogger::getLogData(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+        sendActivityMonitorData(data);
     #ifdef ACTIVITY_LOG_TO_FILE
-        MasterLogger::writeActivity(MasterLogger::LogData::DETECTION_TYPE_VOICE);
+        MasterLogger::writeData(data);
     #endif
     } else {
-        LOG_INFO("\n(Vocal) No event detected.\n\n");
+        LOG_INFO("(Vocal) No event detected.\n\n");
     }
+}
+
+void ActivityMonitorModule::sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest, bool wantReplies) {
+    meshtastic_ActivityMonitorModuleConfig am;
+    am.nodeNum = data.nodeNum;
+    am.has_gpsData = true;
+    am.gpsData = {
+        .latitude = data.gpsData.latitude,
+        .longitude = data.gpsData.longitude,
+        .altitude = data.gpsData.altitude,
+    };
+    am.unixTimeStamp = (int64_t) data.unixTimeStamp;
+    am.detectionType = data.detectionType == MasterLogger::LogData::DETECTION_TYPE_SEISMIC
+        ? meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
+        : meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_VOICE;
+    
+    meshtastic_MeshPacket* p = allocDataProtobuf(am);
+    p->to = dest;
+    p->decoded.want_response = wantReplies;
+    p->priority = meshtastic_MeshPacket_Priority_MAX;
+
+    LOG_DEBUG("Sending activity monitor data to network\n");
+    service.sendToMesh(p);
+}
+
+bool ActivityMonitorModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_ActivityMonitorModuleConfig *pptr) {
+#ifdef ACTIVITY_LOG_TO_FILE
+    auto p = *pptr;
+
+    MasterLogger::LogData data;
+    data.nodeNum = p.nodeNum;
+    data.gpsData.latitude = p.gpsData.latitude;
+    data.gpsData.longitude = p.gpsData.longitude;
+    data.gpsData.altitude = p.gpsData.altitude;
+    data.unixTimeStamp = (time_t) p.unixTimeStamp;
+    data.detectionType = p.detectionType == meshtastic_ActivityMonitorModuleConfig_DetectionType_DETECTION_TYPE_SEISMIC
+        ? MasterLogger::LogData::DETECTION_TYPE_SEISMIC
+        : MasterLogger::LogData::DETECTION_TYPE_VOICE;
+    
+    LOG_DEBUG("Received activity monitor data from node: %d\n", data.nodeNum);
+    MasterLogger::writeData(data);
+#endif
+    if(mp.decoded.want_response) {
+        // Send a reply
+        meshtastic_MeshPacket* reply = allocReply();
+        reply->to = mp.from;
+        reply->decoded.want_response = false;
+        reply->priority = meshtastic_MeshPacket_Priority_MAX;
+        service.sendToMesh(reply);
+    }
+
+    return false; // Let others look at this message also if they want
+}
+
+meshtastic_MeshPacket* ActivityMonitorModule::allocReply() {
+    auto reply = allocDataPacket();
+    return reply;
 }

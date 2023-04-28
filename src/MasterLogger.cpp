@@ -64,8 +64,8 @@ void MasterLogger::writeData(LogData& data) {
     //        latDeg latMin latSec latCP lonDeg lonMin lonSec lonCP
     snprintf(
         fmtMessage, messageMaxLength,
-        "%s %s %d %d %d %c %d %d %d %c",
-        timeString, data.detectionType == LogData::DETECTION_TYPE_SEISMIC ? "S" : "V",
+        "%u %s %s %d %d %d %c %d %d %d %c",
+        data.nodeNum, timeString, data.detectionType == LogData::DETECTION_TYPE_SEISMIC ? "S" : "V",
         coord.getDMSLatDeg(), coord.getDMSLatMin(), coord.getDMSLatSec(), coord.getDMSLatCP(),
         coord.getDMSLonDeg(), coord.getDMSLonMin(), coord.getDMSLonSec(), coord.getDMSLonCP()
     );
@@ -73,7 +73,10 @@ void MasterLogger::writeData(LogData& data) {
     // Open master file as write (defaults to appending)
     {
         concurrency::LockGuard g(spiLock);
-        File masterFile = filesystem->open(MASTER_FILE_NAME, "w");
+        File masterFile = filesystem->open(MASTER_FILE_NAME, "a");
+        if(!masterFile) {
+            masterFile = filesystem->open(MASTER_FILE_NAME, "w", true);
+        }
         if(masterFile) {
             masterFile.println(fmtMessage);
             masterFile.close();
@@ -81,8 +84,9 @@ void MasterLogger::writeData(LogData& data) {
     }
 }
 
-void MasterLogger::writeActivity(LogData::DetectionType detectionType) {
+MasterLogger::LogData MasterLogger::getLogData(LogData::DetectionType detectionType) {
     MasterLogger::LogData data;
+    data.nodeNum = nodeDB.getNodeNum();
     data.gpsData = {
         gpsStatus->getLatitude(),
         gpsStatus->getLongitude(),
@@ -90,7 +94,7 @@ void MasterLogger::writeActivity(LogData::DetectionType detectionType) {
     };
     data.unixTimeStamp = getTime();
     data.detectionType = detectionType;
-    writeData(data);
+    return data;
 }
 
 bool MasterLogger::readLog(String& outLog) {
@@ -105,4 +109,11 @@ bool MasterLogger::readLog(String& outLog) {
         masterFile.close();
     }
     return true;
+}
+
+void MasterLogger::deleteLog() {
+    {
+        concurrency::LockGuard g(spiLock);
+        filesystem->remove(MASTER_FILE_NAME);
+    }
 }

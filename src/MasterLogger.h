@@ -1,7 +1,7 @@
 #pragma once
 
-
 #include "GeoCoord.h"
+#include "NodeDB.h"
 
 #include <WString.h>
 #include <cstdint>
@@ -12,6 +12,9 @@
 class MasterLogger {
 public:
     struct LogData {
+        // NodeDB.h -> nodeDB.getNodeNum()
+        NodeNum nodeNum;
+
         // lat, lon, and alt are from `extern meshtastic::GPSStatus *gpsStatus` global var.
         // gpsStatus->getLatitude(), gpsStatus->getLongitude(), gpsStatus->GetAltitude()
         struct GPS {
@@ -39,9 +42,11 @@ public:
      */
     static void writeData(LogData& data);
 
-    static void writeActivity(LogData::DetectionType detectionType);
+    static LogData getLogData(LogData::DetectionType detectionType);
 
     static bool readLog(String& outLog);
+
+    static void deleteLog();
 
     static void useFallbackFS();
     static void useSDFS();

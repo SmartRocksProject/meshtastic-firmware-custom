@@ -9,7 +9,7 @@
 #define EXT_NOTIFY_OUT 13 // Default pin to use for Ext Notify Module.
 
 #define LED_INVERTED 1
-#define LED_PIN 4 // Newer tbeams (1.1) have an extra led on GPIO4
+//#define LED_PIN 4 // Newer tbeams (1.1) have an extra led on GPIO4
 
 // TTGO uses a common pinout for their SX1262 vs RF95 modules - both can be enabled and we will probe at runtime for RF95 and if
 // not found then probe for SX1262
@@ -44,15 +44,15 @@
 
 #define SDCARD_CS                   SPI_CS
 
-#define ADS1115_ALERT_PIN           (4)
+#define ADS1115_ALERT_PIN           (14)
 
-#define I2S_SCK                     (32)
+#define I2S_SCK                     (25)
 #define I2S_WS                      (15)
-#define I2S_SD                      (33)
-#define I2S_LR                      (25)
+#define I2S_SD                      (13)
 
 // Uncomment below to enable file logging and node sharing.
 #define ACTIVITY_LOG_TO_FILE
+//#define WIPE_LOG_ON_STARTUP
 
 // Leave undefined to disable our PMU IRQ handler.  DO NOT ENABLE THIS because the pmuirq can cause sperious interrupts
 // and waking from light sleep

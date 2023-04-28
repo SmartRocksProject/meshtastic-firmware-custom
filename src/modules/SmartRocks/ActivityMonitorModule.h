@@ -7,9 +7,11 @@
 #include "concurrency/Lock.h"
 #include "Sensor/GS1LFSensor.h"
 #include "Sensor/INMP441Sensor.h"
-#include "SinglePortModule.h"
+#include "ProtobufModule.h"
+#include "mesh/generated/meshtastic/activitymonitor.pb.h"
+#include "MasterLogger.h"
 
-class ActivityMonitorModule : public SinglePortModule, public concurrency::NotifiedWorkerThread {
+class ActivityMonitorModule : public ProtobufModule<meshtastic_ActivityMonitorModuleConfig>, public concurrency::NotifiedWorkerThread {
 public:
     ActivityMonitorModule();
     ~ActivityMonitorModule();
@@ -17,6 +19,16 @@ public:
     virtual void onNotify(uint32_t notification) override;
 
     TaskHandle_t runningTaskHandle{};
+protected:
+    /** Called to handle a particular incoming message
+
+    @return true if you've guaranteed you've handled this message and no other handlers should be considered for it
+    */
+    virtual bool handleReceivedProtobuf(const meshtastic_MeshPacket &mp, meshtastic_ActivityMonitorModuleConfig *pptr) override;
+
+    /** Messages can be received that have the want_response bit set.  If set, this callback will be invoked
+     * so that subclasses can (optionally) send a response back to the original sender.  */
+    virtual meshtastic_MeshPacket* allocReply() override;
 private:
     void collectData();
     void analyzeData();
@@ -27,13 +39,8 @@ private:
     void analyzeGeophoneData();
     void analyzeMicrophoneData();
 
-    static void geophoneCollectThread(void* p);
-    static void microphoneCollectThread(void* p);
-
-    void sendPayload(NodeNum dest, bool wantReplies);
+    void sendActivityMonitorData(MasterLogger::LogData& data, NodeNum dest = NODENUM_BROADCAST, bool wantReplies = false);
 private:
-    concurrency::Lock geophoneCollecting{};
-    concurrency::Lock microphoneCollecting{};
     concurrency::Lock collectionFlagLock{};
     bool dataCollectionStarted{};
 
@@ -44,7 +51,7 @@ private:
         float* outputData;
 
         bool successfulRead{false};
-        enum { numSamples = 4096 };
+        enum { numSamples = 2048 };
         const double samplingFrequency{860.0};
         const double lowThreshold{0.3};
         const double highThreshold{1.0};
@@ -52,7 +59,7 @@ private:
         const struct freqRange {
             double low;
             double high;
-        } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
+        } frequencyRangeThreshold{.low = 2.0, .high = 80.0};
     } geophoneSensorData;
     bool geophoneInitialized{};
 
@@ -60,21 +67,20 @@ private:
         INMP441Sensor inmp441Sensor;
         
         enum { 
-            vadSampleRate = 16000,
-            vadFrameLengthMs = 30,
-            vadBufferLength = (vadFrameLengthMs * vadSampleRate / 1000)
+            sampleRate = 16000,
+            frameLengthMs = 30,
+            bufferLength = (frameLengthMs * sampleRate / 1000)
         };
-        vad_handle_t vad_inst;
-        int16_t* vadBuffer;
-        //uint8_t* inputData;
+        int16_t* samples;
 
         bool successfulRead{false};
-        const uint32_t samplingFrequency{vadSampleRate};
-        const double amplitudeThreshold{1.0};
+        const double amplitudeThreshold{100.0};
+        /*
         const struct freqRange {
             double low;
             double high;
         } frequencyRangeThreshold{.low = 0.0, .high = 100.0};
+        */
     } microphoneSensorData;
     bool microphoneInitialized{};
 };
